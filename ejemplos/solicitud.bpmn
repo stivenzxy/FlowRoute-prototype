@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:fr="http://flowroute.dev/schema/1.0" id="Definitions_Solicitud" targetNamespace="http://flowroute.dev/examples" exporter="FlowRoute" exporterVersion="0.2">
+  <bpmn:process id="Process_Solicitud" name="Gestión de solicitud" isExecutable="false">
+    <bpmn:extensionElements><fr:variable name="solicitudValida" type="boolean" value="true"/></bpmn:extensionElements>
+    <bpmn:startEvent id="StartEvent_1" name="Inicio"><bpmn:outgoing>Flow_1</bpmn:outgoing></bpmn:startEvent>
+    <bpmn:userTask id="Task_Recibir" name="Recibir solicitud" fr:symbol="r"><bpmn:incoming>Flow_1</bpmn:incoming><bpmn:outgoing>Flow_2</bpmn:outgoing></bpmn:userTask>
+    <bpmn:serviceTask id="Task_Validar" name="Validar solicitud" fr:symbol="v"><bpmn:incoming>Flow_2</bpmn:incoming><bpmn:outgoing>Flow_3</bpmn:outgoing></bpmn:serviceTask>
+    <bpmn:exclusiveGateway id="Gateway_Valida" name="¿Solicitud válida?"><bpmn:incoming>Flow_3</bpmn:incoming><bpmn:outgoing>Flow_Aprobar</bpmn:outgoing><bpmn:outgoing>Flow_Rechazar</bpmn:outgoing></bpmn:exclusiveGateway>
+    <bpmn:userTask id="Task_Aprobar" name="Aprobar solicitud" fr:symbol="a"><bpmn:incoming>Flow_Aprobar</bpmn:incoming><bpmn:outgoing>Flow_6</bpmn:outgoing></bpmn:userTask>
+    <bpmn:userTask id="Task_Rechazar" name="Rechazar solicitud" fr:symbol="j"><bpmn:incoming>Flow_Rechazar</bpmn:incoming><bpmn:outgoing>Flow_7</bpmn:outgoing></bpmn:userTask>
+    <bpmn:endEvent id="EndEvent_Aprobado" name="Fin aprobado"><bpmn:incoming>Flow_6</bpmn:incoming></bpmn:endEvent>
+    <bpmn:endEvent id="EndEvent_Rechazado" name="Fin rechazado"><bpmn:incoming>Flow_7</bpmn:incoming></bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Task_Recibir"/>
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Task_Recibir" targetRef="Task_Validar"/>
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="Task_Validar" targetRef="Gateway_Valida"/>
+    <bpmn:sequenceFlow id="Flow_Aprobar" name="válida" sourceRef="Gateway_Valida" targetRef="Task_Aprobar"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${solicitudValida == true}</bpmn:conditionExpression></bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_Rechazar" name="no válida" sourceRef="Gateway_Valida" targetRef="Task_Rechazar"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${solicitudValida == false}</bpmn:conditionExpression></bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_6" sourceRef="Task_Aprobar" targetRef="EndEvent_Aprobado"/>
+    <bpmn:sequenceFlow id="Flow_7" sourceRef="Task_Rechazar" targetRef="EndEvent_Rechazado"/>
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_Solicitud">
+      <bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1"><dc:Bounds x="152" y="182" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_Recibir_di" bpmnElement="Task_Recibir"><dc:Bounds x="240" y="160" width="100" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_Validar_di" bpmnElement="Task_Validar"><dc:Bounds x="390" y="160" width="100" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_Valida_di" bpmnElement="Gateway_Valida" isMarkerVisible="true"><dc:Bounds x="545" y="175" width="50" height="50"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_Aprobar_di" bpmnElement="Task_Aprobar"><dc:Bounds x="650" y="80" width="100" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_Rechazar_di" bpmnElement="Task_Rechazar"><dc:Bounds x="650" y="240" width="100" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_Aprobado_di" bpmnElement="EndEvent_Aprobado"><dc:Bounds x="802" y="102" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_Rechazado_di" bpmnElement="EndEvent_Rechazado"><dc:Bounds x="802" y="262" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_1_di" bpmnElement="Flow_1"><di:waypoint x="188" y="200"/><di:waypoint x="240" y="200"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_2_di" bpmnElement="Flow_2"><di:waypoint x="340" y="200"/><di:waypoint x="390" y="200"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_3_di" bpmnElement="Flow_3"><di:waypoint x="490" y="200"/><di:waypoint x="545" y="200"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Aprobar_di" bpmnElement="Flow_Aprobar"><di:waypoint x="570" y="175"/><di:waypoint x="570" y="120"/><di:waypoint x="650" y="120"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Rechazar_di" bpmnElement="Flow_Rechazar"><di:waypoint x="570" y="225"/><di:waypoint x="570" y="280"/><di:waypoint x="650" y="280"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_6_di" bpmnElement="Flow_6"><di:waypoint x="750" y="120"/><di:waypoint x="802" y="120"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_7_di" bpmnElement="Flow_7"><di:waypoint x="750" y="280"/><di:waypoint x="802" y="280"/></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

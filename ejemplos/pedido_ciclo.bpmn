@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_Pedido" targetNamespace="http://flowroute.dev/examples">
+  <bpmn:process id="Process_Pedido" name="Pedido con corrección (ciclo)" isExecutable="false">
+    <bpmn:documentation>Ejemplo sin símbolos fr:symbol: el importador deriva el alfabeto a partir de los nombres.</bpmn:documentation>
+    <bpmn:startEvent id="Start_1" name="Inicio"/>
+    <bpmn:task id="Task_Registrar" name="Registrar pedido"/>
+    <bpmn:task id="Task_Revisar" name="Revisar pedido"/>
+    <bpmn:exclusiveGateway id="Gw_Correccion" name="¿Requiere corrección?" default="Flow_Confirmar"/>
+    <bpmn:task id="Task_Corregir" name="Corregir pedido"/>
+    <bpmn:task id="Task_Confirmar" name="Confirmar pedido"/>
+    <bpmn:endEvent id="End_1" name="Fin"/>
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Start_1" targetRef="Task_Registrar"/>
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Task_Registrar" targetRef="Task_Revisar"/>
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="Task_Revisar" targetRef="Gw_Correccion"/>
+    <bpmn:sequenceFlow id="Flow_Corregir" name="sí" sourceRef="Gw_Correccion" targetRef="Task_Corregir"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">requiereCorreccion == true</bpmn:conditionExpression></bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_Volver" sourceRef="Task_Corregir" targetRef="Task_Revisar"/>
+    <bpmn:sequenceFlow id="Flow_Confirmar" name="no" sourceRef="Gw_Correccion" targetRef="Task_Confirmar"/>
+    <bpmn:sequenceFlow id="Flow_Fin" sourceRef="Task_Confirmar" targetRef="End_1"/>
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_Pedido">
+      <bpmndi:BPMNShape id="Start_1_di" bpmnElement="Start_1"><dc:Bounds x="152" y="182" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_Registrar_di" bpmnElement="Task_Registrar"><dc:Bounds x="240" y="160" width="100" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_Revisar_di" bpmnElement="Task_Revisar"><dc:Bounds x="390" y="160" width="100" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gw_Correccion_di" bpmnElement="Gw_Correccion" isMarkerVisible="true"><dc:Bounds x="545" y="175" width="50" height="50"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_Corregir_di" bpmnElement="Task_Corregir"><dc:Bounds x="390" y="300" width="100" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_Confirmar_di" bpmnElement="Task_Confirmar"><dc:Bounds x="650" y="160" width="100" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End_1_di" bpmnElement="End_1"><dc:Bounds x="802" y="182" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_1_di" bpmnElement="Flow_1"><di:waypoint x="188" y="200"/><di:waypoint x="240" y="200"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_2_di" bpmnElement="Flow_2"><di:waypoint x="340" y="200"/><di:waypoint x="390" y="200"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_3_di" bpmnElement="Flow_3"><di:waypoint x="490" y="200"/><di:waypoint x="545" y="200"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Corregir_di" bpmnElement="Flow_Corregir"><di:waypoint x="570" y="225"/><di:waypoint x="570" y="340"/><di:waypoint x="490" y="340"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Volver_di" bpmnElement="Flow_Volver"><di:waypoint x="440" y="300"/><di:waypoint x="440" y="240"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Confirmar_di" bpmnElement="Flow_Confirmar"><di:waypoint x="595" y="200"/><di:waypoint x="650" y="200"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Fin_di" bpmnElement="Flow_Fin"><di:waypoint x="750" y="200"/><di:waypoint x="802" y="200"/></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

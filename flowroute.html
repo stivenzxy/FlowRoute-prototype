@@ -1,0 +1,1054 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FlowRoute — prototipo</title>
+<style>
+  :root{
+    --bg:#f3f4f6; --panel:#ffffff; --border:#d9dde3; --text:#1f2937; --muted:#6b7280;
+    --accent:#2563eb; --accent-soft:#dbeafe;
+    --start:#16a34a; --end:#dc2626; --task:#2563eb; --xor:#d97706;
+    --ok:#16a34a; --ok-soft:#dcfce7; --err:#dc2626; --err-soft:#fee2e2; --warn:#d97706; --warn-soft:#fef3c7;
+    --run:#7c3aed; --run-soft:#ede9fe;
+    --radius:6px; --font:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; --mono:ui-monospace,Consolas,"SF Mono",monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;overflow:hidden;font-family:var(--font);font-size:13px;color:var(--text);background:var(--bg)}
+  button,input,select{font:inherit;color:inherit}
+  button{cursor:pointer;border:1px solid var(--border);background:#fff;border-radius:var(--radius);padding:5px 10px;line-height:1.2;white-space:nowrap}
+  header .badge{white-space:nowrap}
+  button:hover{background:#f1f5f9;border-color:#b8c0cc}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  button.primary:hover{background:#1d4ed8}
+  button.small{padding:3px 8px;font-size:12px}
+  input,select{border:1px solid var(--border);border-radius:var(--radius);padding:5px 7px;background:#fff;width:100%}
+  input:focus,select:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+  code,.mono{font-family:var(--mono);font-size:12px}
+  h3{margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+  h4{margin:12px 0 6px;font-size:13px}
+  p{margin:4px 0}
+  .muted{color:var(--muted)}
+  .hint{font-size:12px;color:var(--muted);line-height:1.45}
+
+  /* ---- layout ---- */
+  #app{display:grid;grid-template-rows:46px 1fr;grid-template-columns:230px 1fr 340px;height:100vh;
+       grid-template-areas:"top top top" "left center right"}
+  #app.hide-left{grid-template-columns:0 1fr 340px}
+  #app.hide-right{grid-template-columns:230px 1fr 0}
+  #app.hide-left.hide-right{grid-template-columns:0 1fr 0}
+  header{grid-area:top;display:flex;align-items:center;gap:10px;padding:0 12px;background:var(--panel);border-bottom:1px solid var(--border)}
+  .logo{display:flex;align-items:center;gap:7px;font-weight:700;font-size:15px}
+  .logo .mark{width:22px;height:22px;border-radius:5px;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:12px}
+  .sep{width:1px;height:24px;background:var(--border)}
+  #procName{width:190px;min-width:120px;font-weight:600}
+  .badge{display:inline-block;padding:2px 7px;border-radius:999px;font-size:11px;font-weight:600;background:var(--accent-soft);color:var(--accent)}
+  .badge.gray{background:#e5e7eb;color:#374151}
+  .badge.ok{background:var(--ok-soft);color:var(--ok)}
+  .badge.err{background:var(--err-soft);color:var(--err)}
+  .badge.warn{background:var(--warn-soft);color:var(--warn)}
+  .badge.run{background:var(--run-soft);color:var(--run)}
+  .spacer{flex:1}
+  aside{background:var(--panel);overflow:auto;padding:12px}
+  #left{grid-area:left;border-right:1px solid var(--border)}
+  #right{grid-area:right;border-left:1px solid var(--border);padding:0;display:flex;flex-direction:column}
+  #center{grid-area:center;position:relative;overflow:hidden;background:#eef0f3;
+    background-image:radial-gradient(#d4d8de 1px,transparent 1px);background-size:20px 20px}
+  .section{margin-bottom:16px}
+
+  /* ---- palette ---- */
+  .palette{display:grid;gap:6px}
+  .pal{display:flex;align-items:center;gap:9px;padding:7px 9px;border:1px solid var(--border);border-radius:var(--radius);background:#fff;cursor:grab;user-select:none}
+  .pal:hover{border-color:var(--accent);background:#f8fafc}
+  .pal.disabled{opacity:.5;cursor:not-allowed}
+  .pal .ic{width:22px;height:22px;flex:none}
+  .pal small{display:block;color:var(--muted);font-size:11px}
+  .examples button{width:100%;text-align:left;margin-bottom:5px;white-space:normal}
+  header button.small{padding:4px 7px}
+  header{min-width:0;position:relative;z-index:30}
+  .menu{position:relative}
+  .menu-list{display:none;position:absolute;right:0;top:calc(100% + 4px);background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 6px 18px rgba(0,0,0,.12);min-width:210px;padding:4px;z-index:20}
+  .menu-list.open{display:block}
+  .menu-list button{display:block;width:100%;text-align:left;border:0;border-radius:4px;padding:7px 10px}
+  .menu-list hr{border:0;border-top:1px solid var(--border);margin:4px 0}
+  @media (max-width:1100px){ header .sep{display:none} #procName{width:140px} }
+
+  /* ---- canvas ---- */
+  #svg{width:100%;height:100%;display:block;cursor:grab}
+  #svg.panning{cursor:grabbing}
+  .node{cursor:move}
+  .node .shape{stroke-width:1.6;transition:filter .15s}
+  .node:hover .shape{filter:brightness(.96)}
+  .node.selected .shape{stroke:var(--accent)!important;stroke-width:2.5}
+  .node.error .shape{stroke:var(--err)!important;stroke-dasharray:4 3}
+  .node.visited .shape{filter:drop-shadow(0 0 3px rgba(124,58,237,.6))}
+  .node.current .shape{stroke:var(--run)!important;stroke-width:3;animation:pulse 1s infinite}
+  .node.cycle .shape{stroke:var(--warn)!important;stroke-width:3}
+  .node.unreach .shape{opacity:.45}
+  .node text{font-size:12px;font-family:var(--font);pointer-events:none;user-select:none}
+  .node .sym{font-family:var(--mono);font-weight:700;font-size:11px}
+  .handle{fill:#fff;stroke:var(--accent);stroke-width:1.5;cursor:crosshair;opacity:0}
+  .node:hover .handle,.node.selected .handle{opacity:1}
+  .edge path.line{fill:none;stroke:#6b7280;stroke-width:1.6}
+  .edge path.hit{fill:none;stroke:transparent;stroke-width:14;cursor:pointer}
+  .edge.selected path.line{stroke:var(--accent);stroke-width:2.4}
+  .edge.error path.line{stroke:var(--err);stroke-dasharray:5 3}
+  .edge.traversed path.line{stroke:var(--run);stroke-width:2.4;stroke-dasharray:6 4;animation:dash 1.2s linear infinite}
+  .edge.cycle path.line{stroke:var(--warn);stroke-width:2.4}
+  .edge text{font-size:11px;font-family:var(--mono);fill:#374151;pointer-events:none}
+  .edge .lbl-bg{fill:#fff;stroke:var(--border);rx:3;cursor:pointer}
+  .edge.selected .lbl-bg{stroke:var(--accent)}
+  .edge.default text{font-style:italic}
+  @keyframes pulse{0%,100%{stroke-opacity:1}50%{stroke-opacity:.35}}
+  @keyframes dash{to{stroke-dashoffset:-20}}
+  #tempEdge{stroke:var(--accent);stroke-width:1.6;stroke-dasharray:5 4;fill:none;pointer-events:none}
+  .canvas-tools{position:absolute;left:10px;bottom:10px;display:flex;gap:4px;background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:4px}
+  .canvas-tools button{border:0;padding:4px 8px}
+  #minimap{position:absolute;right:10px;bottom:10px;width:160px;height:100px;background:rgba(255,255,255,.9);border:1px solid var(--border);border-radius:var(--radius)}
+  #canvasStatus{position:absolute;top:10px;left:10px;display:flex;gap:6px;flex-wrap:wrap}
+  .toggle{position:absolute;top:10px;z-index:2}
+  #toggleLeft{left:10px}#toggleRight{right:10px}
+  #center .toggle{top:auto;bottom:118px}
+
+  /* ---- right panel ---- */
+  .tabs{display:flex;border-bottom:1px solid var(--border);flex:none}
+  .tabs button{flex:1;border:0;border-radius:0;background:transparent;padding:10px 4px;color:var(--muted);border-bottom:2px solid transparent}
+  .tabs button.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+  .tabbody{padding:12px;overflow:auto;flex:1}
+  .field{margin-bottom:9px}
+  .field label{display:block;font-size:11px;color:var(--muted);margin-bottom:3px}
+  .row{display:flex;gap:6px;align-items:center}
+  .row>*{flex:1}
+  .card{border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;margin-bottom:8px;background:#fff}
+  .card.ok{border-left:3px solid var(--ok)}
+  .card.err{border-left:3px solid var(--err)}
+  .card.warn{border-left:3px solid var(--warn)}
+  .card.info{border-left:3px solid var(--accent)}
+  .card .title{font-weight:600;display:flex;justify-content:space-between;gap:6px;align-items:center}
+  .card .els{margin-top:4px;display:flex;flex-wrap:wrap;gap:4px}
+  .chip{font-size:11px;padding:1px 6px;border-radius:4px;background:#f1f5f9;border:1px solid var(--border);cursor:pointer}
+  .chip:hover{border-color:var(--accent);color:var(--accent)}
+  .trace-steps{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0}
+  .ts{font-family:var(--mono);font-size:12px;padding:3px 7px;border-radius:4px;background:#f1f5f9;border:1px solid var(--border)}
+  .ts.ok{background:var(--ok-soft);border-color:#86efac}
+  .ts.err{background:var(--err-soft);border-color:#fca5a5}
+  .ts.acc{background:var(--run-soft);border-color:#c4b5fd}
+  table{border-collapse:collapse;width:100%;font-size:12px}
+  th,td{border:1px solid var(--border);padding:3px 6px;text-align:left}
+  th{background:#f8fafc;font-weight:600}
+  td.sink{color:var(--muted)}
+  td.acc{background:var(--ok-soft)}
+  .history li{margin:2px 0}
+  ol,ul{padding-left:18px;margin:4px 0}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:12px}
+  .kv b{font-weight:600}
+  .symline{font-family:var(--mono);font-size:16px;letter-spacing:.15em;padding:6px 8px;background:#f8fafc;border:1px solid var(--border);border-radius:var(--radius);min-height:32px}
+  .empty{color:var(--muted);font-style:italic}
+  @media (max-width:900px){#app{grid-template-columns:200px 1fr 300px}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="logo"><span class="mark">FR</span>FlowRoute</div>
+    <div class="sep"></div>
+    <input id="procName" title="Nombre del proceso">
+    <span class="badge" title="Formalismo activo">Formalismo: AFD</span>
+    <span id="validBadge" class="badge gray">—</span>
+    <div class="spacer"></div>
+    <button id="btnUndo" class="small" title="Ctrl+Z">↶ Deshacer</button>
+    <button id="btnRedo" class="small" title="Ctrl+Y">↷ Rehacer</button>
+    <div class="sep"></div>
+    <button id="btnImportBpmn" class="small primary">Importar .bpmn</button>
+    <button id="btnExportBpmn" class="small">Exportar .bpmn</button>
+    <input id="fileImportBpmn" type="file" accept=".bpmn,.xml,application/xml,text/xml" hidden>
+    <div class="menu">
+      <button id="btnMore" class="small">Más ▾</button>
+      <div class="menu-list" id="moreMenu">
+        <button id="btnSave" title="Guarda el modelo interno en localStorage">Guardar (localStorage)</button>
+        <button id="btnLoad">Cargar guardado</button>
+        <button id="btnExport" title="Modelo interno (formato secundario)">Exportar JSON interno</button>
+        <button id="btnImport" title="Modelo interno (formato secundario)">Importar JSON interno</button>
+        <hr>
+        <button id="btnTests">Ejecutar pruebas</button>
+        <button id="btnDemo">Restablecer demo</button>
+      </div>
+    </div>
+    <input id="fileImport" type="file" accept="application/json" hidden>
+  </header>
+
+  <aside id="left">
+    <div class="section">
+      <h3>Elementos BPMN</h3>
+      <div class="palette">
+        <div class="pal" data-add="start"><svg class="ic" viewBox="0 0 22 22"><circle cx="11" cy="11" r="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.6"/></svg><div>Inicio<small>Evento de inicio (único)</small></div></div>
+        <div class="pal" data-add="task"><svg class="ic" viewBox="0 0 22 22"><rect x="2" y="5" width="18" height="12" rx="3" fill="#dbeafe" stroke="#2563eb" stroke-width="1.6"/></svg><div>Tarea<small>Produce un símbolo</small></div></div>
+        <div class="pal" data-add="xor"><svg class="ic" viewBox="0 0 22 22"><path d="M11 2 20 11 11 20 2 11Z" fill="#fef3c7" stroke="#d97706" stroke-width="1.6"/><text x="11" y="15" text-anchor="middle" font-size="10" font-weight="700" fill="#d97706">×</text></svg><div>Compuerta XOR<small>Decisión exclusiva</small></div></div>
+        <div class="pal" data-add="end"><svg class="ic" viewBox="0 0 22 22"><circle cx="11" cy="11" r="9" fill="#fee2e2" stroke="#dc2626" stroke-width="2.6"/></svg><div>Fin<small>Estado de aceptación</small></div></div>
+        <div class="pal disabled" title="No implementada: requiere semántica de ramas activas y sincronización, no una transición alternativa del AFD."><svg class="ic" viewBox="0 0 22 22"><path d="M11 2 20 11 11 20 2 11Z" fill="#f3f4f6" stroke="#9ca3af" stroke-width="1.6"/><circle cx="11" cy="11" r="4" fill="none" stroke="#9ca3af" stroke-width="1.4"/></svg><div>Compuerta OR<small>Futuro · no implementada</small></div></div>
+      </div>
+    </div>
+    <div class="section">
+      <h3>Uso</h3>
+      <p class="hint">Clic en un elemento para añadirlo. Arrastra para mover. Arrastra desde el punto azul de un nodo hasta otro para crear un flujo. <b>Supr</b> elimina la selección. Rueda = zoom, arrastrar el fondo = desplazar.</p>
+    </div>
+    <div class="section examples">
+      <h3>Ejemplos (.bpmn)</h3>
+      <button data-example="solicitud">solicitud.bpmn — aprobar / rechazar</button>
+      <button data-example="ciclo">pedido_ciclo.bpmn — ciclo, sin fr:symbol</button>
+      <button data-example="paralelo">paralelo.bpmn — elementos no soportados</button>
+      <p class="hint">Todos pasan por el importador BPMN 2.0; también puedes descargarlos con «Exportar .bpmn».</p>
+    </div>
+    <div class="section">
+      <h3>Semántica</h3>
+      <p class="hint"><b>Símbolos:</b> cada actividad (task y subtipos) emite exactamente un símbolo al completarse; Σ = símbolos de las tareas. Inicio, fin, compuertas y flujos de secuencia son ε (<b>no emiten símbolo</b>).<br>
+      <b>Estados:</b> q0 = tras el inicio; un estado por tarea (tras ejecutarla); qError como sumidero. δ(q, s) = estado de la tarea con símbolo s alcanzable desde q atravesando solo XOR.<br>
+      <b>Aceptación:</b> una cadena se acepta si lleva de q0 a un estado desde el que se alcanza un fin solo por XOR. Las condiciones no forman parte del AFD: solo las usa la ejecución con datos.</p>
+    </div>
+    <div class="section">
+      <h3>Subconjunto BPMN soportado</h3>
+      <p class="hint">startEvent, endEvent, task y subtipos, exclusiveGateway, sequenceFlow con condición simple (<code>${var == valor}</code>, true/false) o <code>default</code>. Lo demás (AND/OR, subprocesos, eventos intermedios, pools…) se importa marcado como <b>no soportado</b> y bloquea el análisis; no se simula.</p>
+    </div>
+  </aside>
+
+  <main id="center">
+    <svg id="svg" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#6b7280"/></marker>
+        <marker id="arrowSel" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#2563eb"/></marker>
+        <marker id="arrowRun" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#7c3aed"/></marker>
+        <marker id="arrowErr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#dc2626"/></marker>
+        <marker id="arrowCyc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#d97706"/></marker>
+      </defs>
+      <g id="viewport"></g>
+    </svg>
+    <div id="canvasStatus"></div>
+    <div class="canvas-tools">
+      <button id="zoomIn" title="Acercar">＋</button>
+      <button id="zoomOut" title="Alejar">－</button>
+      <button id="fitView" title="Ajustar vista">⤢</button>
+    </div>
+    <svg id="minimap"></svg>
+    <button class="toggle small" id="toggleLeft" title="Plegar panel izquierdo">◧</button>
+    <button class="toggle small" id="toggleRight" title="Plegar panel derecho">◨</button>
+  </main>
+
+  <aside id="right">
+    <div class="tabs">
+      <button data-tab="props" class="active">Propiedades</button>
+      <button data-tab="exec">Ejecución</button>
+      <button data-tab="trace">Trazas</button>
+      <button data-tab="analysis">Análisis</button>
+    </div>
+    <div class="tabbody" id="tabbody"></div>
+  </aside>
+</div>
+
+<script>
+/* =====================================================================
+   FlowRoute — prototipo de un solo archivo.
+   Capas: Modelo (dominio) · Formal (AFD, análisis, motor) · UI (SVG + paneles).
+   El módulo Formal no toca el DOM.
+   ===================================================================== */
+
+// ---------- utilidades ----------
+const uid = (p) => p + '_' + Math.random().toString(36).slice(2, 8);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const NODE_SIZE = { start:{w:44,h:44}, task:{w:160,h:56}, xor:{w:52,h:52}, end:{w:44,h:44}, unsupported:{w:180,h:52} };
+const sizeOf = (n) => ({ w: n.w || NODE_SIZE[n.type].w, h: n.h || NODE_SIZE[n.type].h });
+const TYPE_LABEL = { start:'Evento de inicio', task:'Tarea', xor:'Compuerta XOR', end:'Evento de fin', unsupported:'Elemento BPMN no soportado' };
+
+// ---------- ejemplos: archivos .bpmn (BPMN 2.0 XML) que pasan por el importador ----------
+const EXAMPLES_BPMN = {
+solicitud: `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:fr="http://flowroute.dev/schema/1.0" id="Definitions_Solicitud" targetNamespace="http://flowroute.dev/examples" exporter="FlowRoute" exporterVersion="0.2">
+  <bpmn:process id="Process_Solicitud" name="Gestión de solicitud" isExecutable="false">
+    <bpmn:extensionElements><fr:variable name="solicitudValida" type="boolean" value="true"/></bpmn:extensionElements>
+    <bpmn:startEvent id="StartEvent_1" name="Inicio"><bpmn:outgoing>Flow_1</bpmn:outgoing></bpmn:startEvent>
+    <bpmn:userTask id="Task_Recibir" name="Recibir solicitud" fr:symbol="r"><bpmn:incoming>Flow_1</bpmn:incoming><bpmn:outgoing>Flow_2</bpmn:outgoing></bpmn:userTask>
+    <bpmn:serviceTask id="Task_Validar" name="Validar solicitud" fr:symbol="v"><bpmn:incoming>Flow_2</bpmn:incoming><bpmn:outgoing>Flow_3</bpmn:outgoing></bpmn:serviceTask>
+    <bpmn:exclusiveGateway id="Gateway_Valida" name="¿Solicitud válida?"><bpmn:incoming>Flow_3</bpmn:incoming><bpmn:outgoing>Flow_Aprobar</bpmn:outgoing><bpmn:outgoing>Flow_Rechazar</bpmn:outgoing></bpmn:exclusiveGateway>
+    <bpmn:userTask id="Task_Aprobar" name="Aprobar solicitud" fr:symbol="a"><bpmn:incoming>Flow_Aprobar</bpmn:incoming><bpmn:outgoing>Flow_6</bpmn:outgoing></bpmn:userTask>
+    <bpmn:userTask id="Task_Rechazar" name="Rechazar solicitud" fr:symbol="j"><bpmn:incoming>Flow_Rechazar</bpmn:incoming><bpmn:outgoing>Flow_7</bpmn:outgoing></bpmn:userTask>
+    <bpmn:endEvent id="EndEvent_Aprobado" name="Fin aprobado"><bpmn:incoming>Flow_6</bpmn:incoming></bpmn:endEvent>
+    <bpmn:endEvent id="EndEvent_Rechazado" name="Fin rechazado"><bpmn:incoming>Flow_7</bpmn:incoming></bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Task_Recibir"/>
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Task_Recibir" targetRef="Task_Validar"/>
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="Task_Validar" targetRef="Gateway_Valida"/>
+    <bpmn:sequenceFlow id="Flow_Aprobar" name="válida" sourceRef="Gateway_Valida" targetRef="Task_Aprobar"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">\${solicitudValida == true}</bpmn:conditionExpression></bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_Rechazar" name="no válida" sourceRef="Gateway_Valida" targetRef="Task_Rechazar"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">\${solicitudValida == false}</bpmn:conditionExpression></bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_6" sourceRef="Task_Aprobar" targetRef="EndEvent_Aprobado"/>
+    <bpmn:sequenceFlow id="Flow_7" sourceRef="Task_Rechazar" targetRef="EndEvent_Rechazado"/>
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_Solicitud">
+      <bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1"><dc:Bounds x="152" y="182" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_Recibir_di" bpmnElement="Task_Recibir"><dc:Bounds x="240" y="160" width="100" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_Validar_di" bpmnElement="Task_Validar"><dc:Bounds x="390" y="160" width="100" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_Valida_di" bpmnElement="Gateway_Valida" isMarkerVisible="true"><dc:Bounds x="545" y="175" width="50" height="50"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_Aprobar_di" bpmnElement="Task_Aprobar"><dc:Bounds x="650" y="80" width="100" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_Rechazar_di" bpmnElement="Task_Rechazar"><dc:Bounds x="650" y="240" width="100" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_Aprobado_di" bpmnElement="EndEvent_Aprobado"><dc:Bounds x="802" y="102" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_Rechazado_di" bpmnElement="EndEvent_Rechazado"><dc:Bounds x="802" y="262" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_1_di" bpmnElement="Flow_1"><di:waypoint x="188" y="200"/><di:waypoint x="240" y="200"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_2_di" bpmnElement="Flow_2"><di:waypoint x="340" y="200"/><di:waypoint x="390" y="200"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_3_di" bpmnElement="Flow_3"><di:waypoint x="490" y="200"/><di:waypoint x="545" y="200"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Aprobar_di" bpmnElement="Flow_Aprobar"><di:waypoint x="570" y="175"/><di:waypoint x="570" y="120"/><di:waypoint x="650" y="120"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Rechazar_di" bpmnElement="Flow_Rechazar"><di:waypoint x="570" y="225"/><di:waypoint x="570" y="280"/><di:waypoint x="650" y="280"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_6_di" bpmnElement="Flow_6"><di:waypoint x="750" y="120"/><di:waypoint x="802" y="120"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_7_di" bpmnElement="Flow_7"><di:waypoint x="750" y="280"/><di:waypoint x="802" y="280"/></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>`,
+ciclo: `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_Pedido" targetNamespace="http://flowroute.dev/examples">
+  <bpmn:process id="Process_Pedido" name="Pedido con corrección (ciclo)" isExecutable="false">
+    <bpmn:documentation>Ejemplo sin símbolos fr:symbol: el importador deriva el alfabeto a partir de los nombres.</bpmn:documentation>
+    <bpmn:startEvent id="Start_1" name="Inicio"/>
+    <bpmn:task id="Task_Registrar" name="Registrar pedido"/>
+    <bpmn:task id="Task_Revisar" name="Revisar pedido"/>
+    <bpmn:exclusiveGateway id="Gw_Correccion" name="¿Requiere corrección?" default="Flow_Confirmar"/>
+    <bpmn:task id="Task_Corregir" name="Corregir pedido"/>
+    <bpmn:task id="Task_Confirmar" name="Confirmar pedido"/>
+    <bpmn:endEvent id="End_1" name="Fin"/>
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Start_1" targetRef="Task_Registrar"/>
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Task_Registrar" targetRef="Task_Revisar"/>
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="Task_Revisar" targetRef="Gw_Correccion"/>
+    <bpmn:sequenceFlow id="Flow_Corregir" name="sí" sourceRef="Gw_Correccion" targetRef="Task_Corregir"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">requiereCorreccion == true</bpmn:conditionExpression></bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_Volver" sourceRef="Task_Corregir" targetRef="Task_Revisar"/>
+    <bpmn:sequenceFlow id="Flow_Confirmar" name="no" sourceRef="Gw_Correccion" targetRef="Task_Confirmar"/>
+    <bpmn:sequenceFlow id="Flow_Fin" sourceRef="Task_Confirmar" targetRef="End_1"/>
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_Pedido">
+      <bpmndi:BPMNShape id="Start_1_di" bpmnElement="Start_1"><dc:Bounds x="152" y="182" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_Registrar_di" bpmnElement="Task_Registrar"><dc:Bounds x="240" y="160" width="100" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_Revisar_di" bpmnElement="Task_Revisar"><dc:Bounds x="390" y="160" width="100" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gw_Correccion_di" bpmnElement="Gw_Correccion" isMarkerVisible="true"><dc:Bounds x="545" y="175" width="50" height="50"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_Corregir_di" bpmnElement="Task_Corregir"><dc:Bounds x="390" y="300" width="100" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_Confirmar_di" bpmnElement="Task_Confirmar"><dc:Bounds x="650" y="160" width="100" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End_1_di" bpmnElement="End_1"><dc:Bounds x="802" y="182" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_1_di" bpmnElement="Flow_1"><di:waypoint x="188" y="200"/><di:waypoint x="240" y="200"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_2_di" bpmnElement="Flow_2"><di:waypoint x="340" y="200"/><di:waypoint x="390" y="200"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_3_di" bpmnElement="Flow_3"><di:waypoint x="490" y="200"/><di:waypoint x="545" y="200"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Corregir_di" bpmnElement="Flow_Corregir"><di:waypoint x="570" y="225"/><di:waypoint x="570" y="340"/><di:waypoint x="490" y="340"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Volver_di" bpmnElement="Flow_Volver"><di:waypoint x="440" y="300"/><di:waypoint x="440" y="240"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Confirmar_di" bpmnElement="Flow_Confirmar"><di:waypoint x="595" y="200"/><di:waypoint x="650" y="200"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Fin_di" bpmnElement="Flow_Fin"><di:waypoint x="750" y="200"/><di:waypoint x="802" y="200"/></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>`,
+paralelo: `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_Paralelo" targetNamespace="http://flowroute.dev/examples">
+  <bpmn:process id="Process_Paralelo" name="Ejemplo con elementos no soportados" isExecutable="false">
+    <bpmn:startEvent id="Start_1" name="Inicio"/>
+    <bpmn:task id="Task_A" name="Preparar"/>
+    <bpmn:parallelGateway id="Gw_Fork" name="Bifurcación AND"/>
+    <bpmn:task id="Task_B" name="Empaquetar"/>
+    <bpmn:task id="Task_C" name="Facturar"/>
+    <bpmn:parallelGateway id="Gw_Join" name="Sincronización AND"/>
+    <bpmn:intermediateCatchEvent id="Timer_1" name="Esperar 1 día"><bpmn:timerEventDefinition id="TimerDef_1"/></bpmn:intermediateCatchEvent>
+    <bpmn:endEvent id="End_1" name="Fin"/>
+    <bpmn:sequenceFlow id="F1" sourceRef="Start_1" targetRef="Task_A"/>
+    <bpmn:sequenceFlow id="F2" sourceRef="Task_A" targetRef="Gw_Fork"/>
+    <bpmn:sequenceFlow id="F3" sourceRef="Gw_Fork" targetRef="Task_B"/>
+    <bpmn:sequenceFlow id="F4" sourceRef="Gw_Fork" targetRef="Task_C"/>
+    <bpmn:sequenceFlow id="F5" sourceRef="Task_B" targetRef="Gw_Join"/>
+    <bpmn:sequenceFlow id="F6" sourceRef="Task_C" targetRef="Gw_Join"/>
+    <bpmn:sequenceFlow id="F7" sourceRef="Gw_Join" targetRef="Timer_1"/>
+    <bpmn:sequenceFlow id="F8" sourceRef="Timer_1" targetRef="End_1"/>
+    <bpmn:textAnnotation id="Note_1"><bpmn:text>Las ramas AND se ejecutan en paralelo</bpmn:text></bpmn:textAnnotation>
+    <bpmn:association id="Assoc_1" sourceRef="Gw_Fork" targetRef="Note_1"/>
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_Paralelo">
+      <bpmndi:BPMNShape id="Start_1_di" bpmnElement="Start_1"><dc:Bounds x="152" y="182" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_A_di" bpmnElement="Task_A"><dc:Bounds x="240" y="160" width="100" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gw_Fork_di" bpmnElement="Gw_Fork"><dc:Bounds x="395" y="175" width="50" height="50"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_B_di" bpmnElement="Task_B"><dc:Bounds x="500" y="80" width="100" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_C_di" bpmnElement="Task_C"><dc:Bounds x="500" y="240" width="100" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gw_Join_di" bpmnElement="Gw_Join"><dc:Bounds x="655" y="175" width="50" height="50"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Timer_1_di" bpmnElement="Timer_1"><dc:Bounds x="762" y="182" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End_1_di" bpmnElement="End_1"><dc:Bounds x="852" y="182" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Note_1_di" bpmnElement="Note_1"><dc:Bounds x="380" y="300" width="180" height="40"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="F1_di" bpmnElement="F1"><di:waypoint x="188" y="200"/><di:waypoint x="240" y="200"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F2_di" bpmnElement="F2"><di:waypoint x="340" y="200"/><di:waypoint x="395" y="200"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F3_di" bpmnElement="F3"><di:waypoint x="420" y="175"/><di:waypoint x="420" y="120"/><di:waypoint x="500" y="120"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F4_di" bpmnElement="F4"><di:waypoint x="420" y="225"/><di:waypoint x="420" y="280"/><di:waypoint x="500" y="280"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F5_di" bpmnElement="F5"><di:waypoint x="600" y="120"/><di:waypoint x="680" y="120"/><di:waypoint x="680" y="175"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F6_di" bpmnElement="F6"><di:waypoint x="600" y="280"/><di:waypoint x="680" y="280"/><di:waypoint x="680" y="225"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F7_di" bpmnElement="F7"><di:waypoint x="705" y="200"/><di:waypoint x="762" y="200"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F8_di" bpmnElement="F8"><di:waypoint x="798" y="200"/><di:waypoint x="852" y="200"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Assoc_1_di" bpmnElement="Assoc_1"><di:waypoint x="420" y="225"/><di:waypoint x="440" y="300"/></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>`
+};
+
+// =====================================================================
+// FORMAL — condiciones, AFD, trazas, análisis y motor. Sin DOM.
+// =====================================================================
+const Formal = (() => {
+  const byId = (m) => Object.fromEntries(m.nodes.map(n => [n.id, n]));
+  const outEdges = (m, id) => m.edges.filter(e => e.source === id);
+  const inEdges  = (m, id) => m.edges.filter(e => e.target === id);
+  const parseValue = (raw) => { const s = String(raw ?? '').trim(); if (s === 'true') return true; if (s === 'false') return false; if (s !== '' && !isNaN(Number(s))) return Number(s); return s; };
+  const condText = (c) => { if (!c || c.kind === 'none') return ''; if (c.kind === 'default') return 'por defecto'; if (c.kind === 'literal') return String(c.value); return `${c.variable} ${c.op} ${c.value}`; };
+
+  // Evaluación segura (sin eval): variables booleanas/numéricas/cadena y comparaciones simples.
+  function evalCondition(c, vars){
+    if (!c || c.kind === 'none' || c.kind === 'default') return { matched:false, reason: c && c.kind === 'default' ? 'salida por defecto' : 'sin condición' };
+    if (c.kind === 'literal') return { matched: c.value === true || c.value === 'true', reason:`literal ${c.value}` };
+    if (!(c.variable in vars)) return { matched:false, error:`variable "${c.variable}" no definida` };
+    const l = vars[c.variable], r = parseValue(c.value);
+    const ops = { '==':(a,b)=>a===b, '!=':(a,b)=>a!==b, '<':(a,b)=>a<b, '<=':(a,b)=>a<=b, '>':(a,b)=>a>b, '>=':(a,b)=>a>=b };
+    const f = ops[c.op]; if (!f) return { matched:false, error:`operador "${c.op}" no admitido` };
+    return { matched: f(l, r), reason:`${c.variable} (${JSON.stringify(l)}) ${c.op} ${JSON.stringify(r)}` };
+  }
+  function varsFromModel(m, overrides){ const v = {}; for (const d of m.variables || []) v[d.name] = parseValue(d.value); return Object.assign(v, overrides || {}); }
+
+  // ---- validación estructural ----
+  function validate(m){
+    const issues = []; const nodes = byId(m);
+    const add = (level, code, message, elements, action) => issues.push({ level, code, message, elements: elements || [], action });
+    const starts = m.nodes.filter(n => n.type === 'start'), ends = m.nodes.filter(n => n.type === 'end');
+    if (starts.length === 0) add('error','no-start','El proceso no tiene evento de inicio.',[], 'Añade un evento de inicio.');
+    if (starts.length > 1) add('error','multi-start','Hay más de un evento de inicio; el AFD admite un único q0.', starts.map(n=>n.id), 'Deja un solo inicio.');
+    if (ends.length === 0) add('error','no-end','El proceso no tiene ningún evento de fin, por lo que F = ∅ y ninguna ejecución puede ser aceptada.',[], 'Añade al menos un evento de fin.');
+    for (const e of m.edges) if (!nodes[e.source] || !nodes[e.target]) add('error','dangling','Flujo hacia o desde un nodo inexistente.',[e.id],'Elimina el flujo.');
+    const symSeen = {};
+    for (const e of m.edges) if (e.condition && e.condition.kind === 'unsupported') add('error','cond-unsupported',`Condición «${e.condition.raw}» no soportada por el evaluador restringido.`,[e.id],'Reescríbela como "variable OP valor" o true/false.');
+    for (const n of m.nodes){
+      const outs = outEdges(m, n.id), ins = inEdges(m, n.id);
+      if (n.type === 'unsupported') add('error','unsupported',`Elemento BPMN <${n.bpmnType}> "${n.id}" reconocido pero sin semántica en el motor (subconjunto soportado: inicio, tarea, XOR, fin).`,[n.id],'Sustitúyelo por elementos soportados o modela esa parte aparte.');
+      if (n.type !== 'start' && ins.length === 0) add('error','no-in',`"${n.name}" no tiene flujos de entrada.`,[n.id],'Conéctalo desde otro nodo.');
+      if (n.type !== 'end' && outs.length === 0) add('error','no-out',`"${n.name}" no tiene flujos de salida: una ruta queda sin evento de fin.`,[n.id],'Conéctalo hacia otro nodo.');
+      if (n.type === 'start' && outs.length > 1) add('error','start-multi','El inicio tiene varias salidas; usa una compuerta XOR para bifurcar.',[n.id]);
+      if (n.type === 'task'){
+        if (!n.symbol) add('error','no-symbol',`La tarea "${n.name}" no tiene símbolo; no puede formar parte de Σ.`,[n.id],'Asigna un símbolo de un carácter.');
+        else { (symSeen[n.symbol] ||= []).push(n.id); }
+        if (outs.length > 1) add('error','task-multi',`"${n.name}" tiene varias salidas sin compuerta; la ejecución sería ambigua.`,[n.id,...outs.map(e=>e.id)],'Inserta una XOR.');
+      }
+      if (n.type === 'end' && outs.length > 0) add('error','end-out','Un evento de fin no puede tener salidas.',[n.id, ...outs.map(e=>e.id)]);
+      if (n.type === 'xor'){
+        if (outs.length === 0) add('error','xor-no-out',`La XOR "${n.name}" no tiene salidas.`,[n.id]);
+        const noCond = outs.filter(e => !e.condition || e.condition.kind === 'none');
+        if (noCond.length) add('error','xor-no-cond',`Salidas de la XOR "${n.name}" sin condición ni regla por defecto.`, noCond.map(e=>e.id),'Define una condición o márcala como salida por defecto.');
+        const defs = outs.filter(e => e.condition && e.condition.kind === 'default');
+        if (defs.length > 1) add('error','xor-multi-default',`La XOR "${n.name}" tiene más de una salida por defecto.`, defs.map(e=>e.id));
+        if (outs.length === 1 && defs.length === 0) add('warning','xor-single',`La XOR "${n.name}" tiene una sola salida condicionada: si la condición falla no hay ruta.`,[n.id],'Añade una salida por defecto.');
+        for (const e of outs) if (e.condition && e.condition.kind === 'compare' && !(m.variables||[]).some(v => v.name === e.condition.variable))
+          add('error','unknown-var',`La condición del flujo usa la variable "${e.condition.variable}", que no está declarada.`,[e.id],'Declárala en la pestaña Ejecución.');
+      }
+    }
+    for (const [s, ids] of Object.entries(symSeen)) if (ids.length > 1) add('error','dup-symbol',`Símbolo "${s}" duplicado: el AFD exige símbolos únicos.`, ids, 'Cambia el símbolo de una de las tareas.');
+    const r = reachability(m); for (const id of r.unreachable) add('warning','unreachable',`"${nodes[id].name}" es inalcanzable desde el inicio.`,[id],'Conéctalo o elimínalo.');
+    return issues;
+  }
+
+  // ---- alcanzabilidad estructural (BFS) ----
+  function reachability(m){
+    const start = m.nodes.find(n => n.type === 'start'); const reach = new Set();
+    if (start){ const q=[start.id]; reach.add(start.id); while(q.length){ const x=q.shift(); for (const e of outEdges(m,x)) if (!reach.has(e.target) && m.nodes.some(n=>n.id===e.target)) { reach.add(e.target); q.push(e.target);} } }
+    return { reachable:[...reach], unreachable: m.nodes.filter(n => !reach.has(n.id)).map(n => n.id) };
+  }
+  // ---- alcanzabilidad bajo datos concretos (las XOR solo abren la salida elegida) ----
+  function reachabilityWithData(m, vars){
+    const start = m.nodes.find(n => n.type === 'start'); const reach = new Set(); const edges = new Set();
+    if (!start) return { reachable:[], edges:[] };
+    const q=[start.id]; reach.add(start.id);
+    while(q.length){ const x=q.shift(); const n = byId(m)[x]; let outs = outEdges(m,x);
+      if (n.type === 'xor'){ const d = decide(outs, vars); outs = d.chosen ? [d.chosen] : []; }
+      for (const e of outs){ edges.add(e.id); if (!reach.has(e.target)) { reach.add(e.target); q.push(e.target);} } }
+    return { reachable:[...reach], edges:[...edges] };
+  }
+  // decisión XOR explícita
+  function decide(outs, vars){
+    const evals = outs.map(e => ({ edge:e, res: evalCondition(e.condition, vars) }));
+    const matches = evals.filter(x => x.res.matched); const def = outs.find(e => e.condition && e.condition.kind === 'default');
+    const errs = evals.filter(x => x.res.error);
+    if (errs.length) return { chosen:null, status:'error', message: errs.map(x=>x.res.error).join('; '), evals };
+    if (matches.length === 1) return { chosen: matches[0].edge, status:'ok', message:`una condición verdadera: ${condText(matches[0].edge.condition)}`, evals };
+    if (matches.length > 1) return { chosen:null, status:'conflict', message:`conflicto: ${matches.length} condiciones verdaderas (${matches.map(x=>condText(x.edge.condition)).join(' / ')}). No se elige ninguna.`, evals };
+    if (def) return { chosen: def, status:'default', message:'ninguna condición verdadera; se usa la salida por defecto', evals };
+    return { chosen:null, status:'no-match', message:'ninguna condición verdadera y no hay salida por defecto', evals };
+  }
+
+  // ---- ciclos (DFS con pila de ruta; cada ciclo = lista de nodos; límite) ----
+  function cycles(m, limit = 20){
+    const found = [], seen = new Set(); const color = {}; const stack = [];
+    const ids = m.nodes.map(n=>n.id);
+    function dfs(u){ color[u]=1; stack.push(u);
+      for (const e of outEdges(m,u)){ const v=e.target; if (!ids.includes(v)) continue;
+        if (color[v]===1){ const cyc = stack.slice(stack.indexOf(v)); const key=[...cyc].sort().join(','); if (!seen.has(key) && found.length<limit){ seen.add(key); found.push(cyc);} }
+        else if (!color[v]) dfs(v); }
+      stack.pop(); color[u]=2; }
+    for (const id of ids) if (!color[id]) dfs(id);
+    return { cycles: found, truncated: found.length >= limit };
+  }
+
+  // ---- rutas completas inicio→fin (caminos simples; límite) ----
+  function completePaths(m, limit = 50){
+    const start = m.nodes.find(n => n.type === 'start'); const nodes = byId(m); const paths = []; let truncated=false;
+    if (!start) return { paths, truncated };
+    function dfs(u, path, edges){ if (paths.length >= limit){ truncated=true; return; }
+      const n = nodes[u]; if (n.type === 'end'){ paths.push({ nodes:[...path], edges:[...edges], symbols: path.map(id=>nodes[id]).filter(x=>x.type==='task').map(x=>x.symbol||'?').join('') }); return; }
+      for (const e of outEdges(m,u)){ if (path.includes(e.target)) continue; if (!nodes[e.target]) continue; path.push(e.target); edges.push(e.id); dfs(e.target, path, edges); path.pop(); edges.pop(); } }
+    dfs(start.id, [start.id], []);
+    return { paths, truncated };
+  }
+
+  // ---- construcción del AFD ----
+  // Estados Q = {q0 (tras el inicio)} ∪ {un estado por tarea (tras ejecutarla)} ∪ {qError}.
+  // Σ = símbolos de las tareas. δ(q,s) = estado de la tarea t con símbolo s si t es alcanzable desde q
+  // atravesando solo compuertas XOR (ε). F = estados desde los que se alcanza un fin solo por XOR.
+  // Las condiciones XOR NO forman parte del AFD: en una traza la decisión queda implícita en el símbolo leído.
+  function epsilonTargets(m, fromId){ // tareas y fines alcanzables atravesando xor
+    const nodes = byId(m); const out=[]; const seen=new Set();
+    (function walk(id, path){ for (const e of outEdges(m,id)){ const t = nodes[e.target]; if (!t) continue;
+      if (t.type === 'xor'){ if (!seen.has(t.id)){ seen.add(t.id); walk(t.id, [...path, e.id]); } }
+      else out.push({ node:t, edges:[...path, e.id] }); } })(fromId, []);
+    return out;
+  }
+  function buildAFD(m){
+    const nodes = byId(m); const start = m.nodes.find(n=>n.type==='start'); const tasks = m.nodes.filter(n=>n.type==='task');
+    const issues = [];
+    const states = []; const stateOf = {};
+    if (start){ states.push({ id:'q0', nodeId:start.id, label:`q0 (tras ${start.name})` }); stateOf[start.id]='q0'; }
+    tasks.forEach((t,i) => { const id=`q${i+1}`; states.push({ id, nodeId:t.id, label:`${id} (tras «${t.name}»)` }); stateOf[t.id]=id; });
+    const SINK='qError'; states.push({ id:SINK, nodeId:null, label:'qError (sumidero)' });
+    const alphabet = [...new Set(tasks.map(t=>t.symbol).filter(Boolean))].sort();
+    const delta = {}; const accepting = new Set(); const edgeFor = {};
+    for (const s of states){ if (s.id===SINK) continue;
+      for (const sym of alphabet) delta[`${s.id}|${sym}`] = SINK;
+      for (const tg of epsilonTargets(m, s.nodeId)){
+        if (tg.node.type === 'end') accepting.add(s.id);
+        else if (tg.node.type === 'task' && tg.node.symbol){ const key=`${s.id}|${tg.node.symbol}`;
+          if (delta[key] !== SINK && delta[key] !== stateOf[tg.node.id]) issues.push(`No determinismo en ${s.id} con «${tg.node.symbol}»: dos tareas distintas con el mismo símbolo.`);
+          delta[key] = stateOf[tg.node.id]; edgeFor[key] = tg.edges; } } }
+    for (const sym of alphabet) delta[`${SINK}|${sym}`] = SINK;
+    return { states, alphabet, delta, q0: start ? 'q0' : null, accepting, sink:SINK, stateOf, edgeFor, issues };
+  }
+
+  // ---- validación de trazas ----
+  function runTrace(afd, word){
+    const steps = []; let q = afd.q0;
+    if (!q) return { status:'invalid', message:'No hay estado inicial: el proceso no tiene inicio.', steps, position:0 };
+    for (let i=0;i<word.length;i++){ const sym = word[i];
+      if (!afd.alphabet.includes(sym)) return { status:'invalid', steps, position:i, message:`El símbolo «${sym}» (posición ${i+1}) no pertenece a Σ = {${afd.alphabet.join(', ')}}.` };
+      const next = afd.delta[`${q}|${sym}`]; steps.push({ sym, from:q, to:next, edges: afd.edgeFor[`${q}|${sym}`] || [] });
+      if (next === afd.sink) return { status:'invalid', steps, position:i, message:`En ${q} no hay transición válida con «${sym}» (posición ${i+1}): δ(${q}, ${sym}) = qError.` };
+      q = next; }
+    if (afd.accepting.has(q)) return { status:'accepted', steps, final:q, message:`La secuencia termina en ${q} ∈ F: ejecución completa y aceptada.` };
+    const nextSyms = afd.alphabet.filter(s => afd.delta[`${q}|${s}`] !== afd.sink);
+    return { status:'incomplete', steps, final:q, message:`Prefijo válido, pero ${q} ∉ F: la ejecución no ha alcanzado un fin. Símbolos posibles a continuación: ${nextSyms.length? nextSyms.map(s=>`«${s}»`).join(', ') : 'ninguno'}.` };
+  }
+
+  // ---- motor de ejecución (un flujo por paso) ----
+  function createRun(m, vars, maxSteps = 50){
+    const start = m.nodes.find(n=>n.type==='start');
+    return { status: start ? 'ready' : 'error', message: start ? 'Listo para ejecutar.' : 'No hay evento de inicio.', current: start ? start.id : null,
+      vars, maxSteps, steps:0, symbols:'', history:[], decisions:[], visited: start ? [start.id] : [], traversed:[], log: [] };
+  }
+  function step(m, run){
+    if (!['ready','running','paused'].includes(run.status)) return run;
+    const nodes = byId(m); const cur = nodes[run.current];
+    if (!cur){ run.status='error'; run.message='El nodo actual ya no existe en el modelo.'; return run; }
+    if (run.steps >= run.maxSteps){ run.status='limit'; run.message=`Límite de ${run.maxSteps} pasos alcanzado: posible ciclo sin salida con estos datos.`; return run; }
+    let edge = null; const outs = outEdges(m, cur.id);
+    if (cur.type === 'xor'){ const d = decide(outs, run.vars); run.decisions.push({ gateway:cur.id, name:cur.name, ...d });
+      if (!d.chosen){ run.status='error'; run.message=`Error en la XOR «${cur.name}»: ${d.message}.`; return run; } edge = d.chosen; }
+    else { if (outs.length === 0){ run.status='incomplete'; run.message=`«${cur.name}» no tiene salida: la ejecución queda incompleta sin alcanzar un fin.`; return run; }
+           if (outs.length > 1){ run.status='error'; run.message=`«${cur.name}» tiene varias salidas sin compuerta: no es posible decidir.`; return run; } edge = outs[0]; }
+    const next = nodes[edge.target]; if (!next){ run.status='error'; run.message='Flujo hacia un nodo inexistente.'; return run; }
+    run.traversed.push(edge.id); run.visited.push(next.id); run.current = next.id; run.steps++;
+    if (next.type === 'task'){ if (!next.symbol){ run.status='error'; run.message=`La tarea «${next.name}» no tiene símbolo.`; return run; }
+      run.symbols += next.symbol; run.history.push({ node:next.id, name:next.name, symbol:next.symbol }); run.status='running'; run.message=`Ejecutada «${next.name}» → símbolo «${next.symbol}».`; }
+    else if (next.type === 'end'){ run.status='completed'; run.message=`Alcanzado el fin «${next.name}»: ejecución completa (estado de aceptación).`; }
+    else if (next.type === 'unsupported'){ run.status='error'; run.message=`«${next.name}» es un <${next.bpmnType}> sin semántica implementada: no se simula su comportamiento.`; }
+    else { run.status='running'; run.message=`En la compuerta «${next.name}»; el siguiente paso evaluará sus condiciones.`; }
+    return run;
+  }
+
+  return { validate, reachability, reachabilityWithData, cycles, completePaths, buildAFD, runTrace, createRun, step, decide, evalCondition, condText, parseValue, varsFromModel, outEdges, byId };
+})();
+
+// =====================================================================
+// BPMN — adaptador BPMN 2.0 XML ⇄ modelo intermedio. Sin DOM de la UI, sin dependencia del motor.
+// Reconoce elementos por espacio de nombres + tipo + id + referencias, nunca por el nombre visible.
+// =====================================================================
+const Bpmn = (() => {
+  const NS = { bpmn:'http://www.omg.org/spec/BPMN/20100524/MODEL', bpmndi:'http://www.omg.org/spec/BPMN/20100524/DI', dc:'http://www.omg.org/spec/DD/20100524/DC', di:'http://www.omg.org/spec/DD/20100524/DI', xsi:'http://www.w3.org/2001/XMLSchema-instance', fr:'http://flowroute.dev/schema/1.0', frLegacy:'http://flowtrace.dev/schema/1.0' };
+  const TASK_TYPES = ['task','userTask','serviceTask','scriptTask','manualTask','sendTask','receiveTask','businessRuleTask'];
+  // Reconocidos pero sin semántica en el motor: se importan como nodos "unsupported" (bloquean AFD/ejecución, nunca se simulan).
+  const UNSUPPORTED_FLOW_NODES = ['parallelGateway','inclusiveGateway','complexGateway','eventBasedGateway','subProcess','adHocSubProcess','transaction','callActivity','intermediateCatchEvent','intermediateThrowEvent','boundaryEvent'];
+  // Elementos que no son nodos de flujo: se descartan y se informa (no silenciosamente).
+  const IGNORED = ['laneSet','lane','dataObject','dataObjectReference','dataStoreReference','dataInputAssociation','dataOutputAssociation','textAnnotation','association','group','documentation','extensionElements','property','ioSpecification'];
+  const SUPPORTED_SUBSET = 'startEvent, endEvent, task (y subtipos userTask, serviceTask, scriptTask, manualTask, sendTask, receiveTask, businessRuleTask), exclusiveGateway, sequenceFlow con conditionExpression simple o atributo default';
+
+  const xmlEsc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
+  const childrenNS = (el, local) => [...el.children].filter(c => c.namespaceURI === NS.bpmn && c.localName === local);
+
+  // ---- condiciones: gramática restringida, sin eval ----
+  // Admite: ${expr} o expr, donde expr = true | false | var OP valor  (OP ∈ ==, !=, <, <=, >, >=; === y != se normalizan).
+  function parseCondition(raw){
+    if (raw == null) return null; let s = String(raw).trim(); const m0 = s.match(/^\$\{([\s\S]*)\}$/); if (m0) s = m0[1].trim(); if (!s) return null;
+    if (/^(true|false)$/i.test(s)) return { kind:'literal', value: s.toLowerCase() };
+    const m = s.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*(===|==|!==|!=|<=|>=|<|>)\s*(.+)$/);
+    if (m){ let v = m[3].trim(); const q = v.match(/^(['"])([^'"]*)\1$/); if (q) v = q[2]; else if (!/^(true|false|-?\d+(\.\d+)?|[A-Za-z_][A-Za-z0-9_]*)$/.test(v)) return { kind:'unsupported', raw:String(raw).trim() };
+      const op = m[2]==='==='?'==': m[2]==='!=='?'!=': m[2]; return { kind:'compare', variable:m[1], op, value:v }; }
+    return { kind:'unsupported', raw:String(raw).trim() };
+  }
+  function conditionToExpression(c){ if (!c) return null; if (c.kind==='literal') return `\${${c.value}}`; if (c.kind==='compare'){ const v = /^(true|false)$/.test(c.value)||(c.value!==''&&!isNaN(Number(c.value)))? c.value : `"${c.value}"`; return `\${${c.variable} ${c.op} ${v}}`; } if (c.kind==='unsupported') return c.raw; return null; }
+
+  // ---- símbolos: correspondencia explícita y reproducible símbolo ↔ id BPMN ----
+  // 1) atributo fr:symbol del elemento si existe y es válido; 2) si no, derivación determinista: primera letra libre del nombre
+  // normalizado (sin acentos, minúsculas), luego a–z, A–Z, 0–9, en orden de documento. El origen se guarda en symbolSource.
+  function deriveSymbols(tasks){ const used = new Set(tasks.filter(t=>t.symbol).map(t=>t.symbol)); const dup = new Set();
+    for (const t of tasks){ if (t.symbol) continue;
+      const base = (t.name||'').normalize('NFD').replace(/[^a-zA-Z]/g,'').toLowerCase(); const cands = base + 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      const c = [...cands].find(ch => !used.has(ch)); if (!c){ t.symbol=''; continue; } t.symbol=c; t.symbolSource='derived'; used.add(c); } return tasks; }
+
+  // ---- importación ----
+  function importXml(text, fileName){
+    const errors = [], warnings = [], info = [];
+    const doc = new DOMParser().parseFromString(text, 'application/xml');
+    const pe = doc.getElementsByTagName('parsererror')[0]; if (pe) return { ok:false, errors:[`XML mal formado: ${pe.textContent.split('\n')[0].slice(0,200)}`] };
+    const root = doc.documentElement;
+    if (root.localName !== 'definitions' || root.namespaceURI !== NS.bpmn) return { ok:false, errors:[`El elemento raíz es <${root.nodeName}> (${root.namespaceURI||'sin namespace'}); se esperaba <definitions> del namespace BPMN 2.0 ${NS.bpmn}.`] };
+    const processes = childrenNS(root, 'process'); if (!processes.length) return { ok:false, errors:['El archivo no contiene ningún <process>.'] };
+    const withFlow = processes.filter(p => [...p.children].some(c => c.namespaceURI===NS.bpmn && !IGNORED.includes(c.localName)));
+    const proc = withFlow[0] || processes[0]; if (processes.length > 1) warnings.push(`El archivo contiene ${processes.length} procesos; se importa «${proc.getAttribute('id')}». Colaboraciones y participantes no están soportados.`);
+    if (childrenNS(root,'collaboration').length) warnings.push('Se ignora <collaboration> (pools/participantes, flujos de mensaje).');
+    const model = { version:2, name: proc.getAttribute('name') || root.getAttribute('name') || proc.getAttribute('id') || 'Proceso', nodes:[], edges:[], variables:[],
+      meta:{ source:'bpmn', fileName: fileName||null, definitionsId: root.getAttribute('id')||'Definitions_1', targetNamespace: root.getAttribute('targetNamespace')||'http://flowroute.dev/bpmn', processId: proc.getAttribute('id')||'Process_1', isExecutable: proc.getAttribute('isExecutable')||'false', exporter: root.getAttribute('exporter')||null, dropped:[] } };
+    const ids = new Set(); const dropCount = {};
+    const gatewayDefaults = {}; const flows = [];
+    for (const el of proc.children){ if (el.namespaceURI !== NS.bpmn) { dropCount[el.nodeName]=(dropCount[el.nodeName]||0)+1; continue; }
+      const t = el.localName, id = el.getAttribute('id'), name = el.getAttribute('name') || '';
+      if (t === 'extensionElements'){ for (const v of [...el.getElementsByTagNameNS(NS.fr,'variable'), ...el.getElementsByTagNameNS(NS.frLegacy,'variable')]) model.variables.push({ name:v.getAttribute('name'), type:v.getAttribute('type')||'string', value:v.getAttribute('value')??'' }); continue; }
+      if (IGNORED.includes(t)){ dropCount[t]=(dropCount[t]||0)+1; continue; }
+      if (!id){ errors.push(`Elemento <${t}> sin atributo id.`); continue; }
+      if (ids.has(id)){ errors.push(`Id duplicado: "${id}".`); continue; } ids.add(id);
+      if (t === 'sequenceFlow'){ flows.push(el); continue; }
+      const docu = childrenNS(el,'documentation').length; if (docu) dropCount.documentation=(dropCount.documentation||0)+docu;
+      let node;
+      if (t === 'startEvent'){ node = { type:'start' }; if ([...el.children].some(c=>/EventDefinition$/.test(c.localName))) warnings.push(`El inicio "${id}" tiene una definición de evento (temporizador/mensaje…); se trata como inicio simple.`); }
+      else if (t === 'endEvent'){ node = { type:'end' }; if ([...el.children].some(c=>/EventDefinition$/.test(c.localName))) warnings.push(`El fin "${id}" tiene una definición de evento (terminate/mensaje…); se trata como fin simple.`); }
+      else if (TASK_TYPES.includes(t)){ const sym = el.getAttributeNS(NS.fr,'symbol') || el.getAttributeNS(NS.frLegacy,'symbol') || ''; node = { type:'task', bpmnType:t, symbol: sym.length===1? sym : '', symbolSource: sym.length===1? 'bpmn':'derived' }; if (sym && sym.length!==1) warnings.push(`fr:symbol="${sym}" de "${id}" no es un carácter; se derivará otro.`); }
+      else if (t === 'exclusiveGateway'){ node = { type:'xor' }; const d = el.getAttribute('default'); if (d) gatewayDefaults[id]=d; }
+      else { node = { type:'unsupported', bpmnType:t }; if (!UNSUPPORTED_FLOW_NODES.includes(t)) warnings.push(`Elemento <${t}> "${id}" desconocido para el importador.`); }
+      Object.assign(node, { id, name: name || (node.type==='task'? id : TYPE_LABEL[node.type]), x:0, y:0 }); model.nodes.push(node);
+    }
+    for (const el of flows){ const id=el.getAttribute('id'), s=el.getAttribute('sourceRef'), tg=el.getAttribute('targetRef');
+      if (!ids.has(s)) errors.push(`sequenceFlow "${id}": sourceRef "${s}" no existe.`); if (!ids.has(tg)) errors.push(`sequenceFlow "${id}": targetRef "${tg}" no existe.`);
+      const edge = { id, source:s, target:tg }; const nm = el.getAttribute('name'); if (nm) edge.name = nm;
+      const ce = childrenNS(el,'conditionExpression')[0]; const cond = ce ? parseCondition(ce.textContent) : null;
+      const srcNode = model.nodes.find(n=>n.id===s); const isDefault = srcNode && gatewayDefaults[srcNode.id] === id;
+      if (isDefault){ edge.condition = { kind:'default' }; if (cond) warnings.push(`El flujo por defecto "${id}" también tiene conditionExpression; BPMN exige que no la tenga. Se usa como salida por defecto.`); }
+      else if (cond){ edge.condition = cond; if (cond.kind==='unsupported') warnings.push(`Condición no soportada en "${id}": «${cond.raw}». Solo se admiten comparaciones simples y true/false.`); if (srcNode && srcNode.type!=='xor') warnings.push(`El flujo "${id}" tiene condición pero su origen no es una XOR; la condición se conserva pero no se evalúa.`); }
+      else if (srcNode && srcNode.type==='xor') edge.condition = { kind:'none' };
+      model.edges.push(edge); }
+    for (const [g, d] of Object.entries(gatewayDefaults)) if (!model.edges.some(e=>e.id===d && e.source===g)) warnings.push(`La XOR "${g}" declara default="${d}" pero ese flujo no sale de ella.`);
+    if (errors.length) return { ok:false, errors, warnings };
+    // variables implícitas en condiciones
+    for (const e of model.edges){ const c=e.condition; if (c && c.kind==='compare' && !model.variables.some(v=>v.name===c.variable)){ const v=c.value; const type = /^(true|false)$/.test(v)?'boolean': (v!==''&&!isNaN(Number(v)))?'number':'string'; model.variables.push({ name:c.variable, type, value: type==='boolean'?'true': type==='number'?'0':'' }); info.push(`Variable «${c.variable}» (${type}) declarada a partir de las condiciones.`); } }
+    // alfabeto
+    const tasks = model.nodes.filter(n=>n.type==='task'); deriveSymbols(tasks); const derived = tasks.filter(t=>t.symbolSource==='derived'); if (derived.length) info.push(`Símbolos derivados del nombre (sin fr:symbol): ${derived.map(t=>`${t.id}→«${t.symbol}»`).join(', ')}.`);
+    // DI
+    const shapes = [...root.getElementsByTagNameNS(NS.bpmndi,'BPMNShape')]; let placed=0;
+    for (const sh of shapes){ const n = model.nodes.find(x=>x.id===sh.getAttribute('bpmnElement')); const b = sh.getElementsByTagNameNS(NS.dc,'Bounds')[0]; if (n && b){ n.x = Math.round(+b.getAttribute('x')); n.y = Math.round(+b.getAttribute('y')); const w=+b.getAttribute('width'), h=+b.getAttribute('height'); if (w>0 && h>0){ n.w=Math.round(w); n.h=Math.round(h); } n.hasDI=true; placed++; } }
+    for (const ed of root.getElementsByTagNameNS(NS.bpmndi,'BPMNEdge')){ const e = model.edges.find(x=>x.id===ed.getAttribute('bpmnElement')); if (!e) continue; const w=[...ed.getElementsByTagNameNS(NS.di,'waypoint')].map(p=>({x:Math.round(+p.getAttribute('x')), y:Math.round(+p.getAttribute('y'))})).filter(p=>!isNaN(p.x)&&!isNaN(p.y)); if (w.length>=2) e.waypoints=w; }
+    const unplaced = model.nodes.filter(n=>!n.hasDI); if (unplaced.length){ autoLayout(model, unplaced); info.push(shapes.length? `${unplaced.length} nodos sin BPMNShape: posicionados automáticamente.` : 'El archivo no tiene diagrama (BPMNDI); el diseño se ha generado automáticamente.'); }
+    model.nodes.forEach(n=>delete n.hasDI);
+    const unsup = model.nodes.filter(n=>n.type==='unsupported'); if (unsup.length) warnings.push(`${unsup.length} elemento(s) reconocidos pero no soportados semánticamente: ${unsup.map(n=>`${n.bpmnType} "${n.id}"`).join(', ')}. Bloquean la derivación del AFD y la ejecución.`);
+    for (const [k,v] of Object.entries(dropCount)){ model.meta.dropped.push(`${k}×${v}`); }
+    if (model.meta.dropped.length) warnings.push(`Descartados al importar (no se conservarán al exportar): ${model.meta.dropped.join(', ')}.`);
+    return { ok:true, model, errors, warnings, info };
+  }
+  function autoLayout(model, nodes){ const start = model.nodes.find(n=>n.type==='start'); const level = {}; const q=[]; if (start){ level[start.id]=0; q.push(start.id); }
+    while(q.length){ const u=q.shift(); for (const e of model.edges.filter(e=>e.source===u)) if (level[e.target]===undefined){ level[e.target]=level[u]+1; q.push(e.target); } }
+    let maxL = Math.max(-1, ...Object.values(level)); const perLevel = {};
+    for (const n of nodes){ if (level[n.id]===undefined) level[n.id]=++maxL; const l=level[n.id]; const i=(perLevel[l]=(perLevel[l]||0)+1)-1; n.x = 80 + l*230 + Math.round((160-sizeOf(n).w)/2); n.y = 80 + i*130 + Math.round((56-sizeOf(n).h)/2); } }
+
+  // ---- exportación ----
+  function exportXml(model){
+    const m = model.meta || {}; const pid = m.processId || 'Process_1'; const lost = [];
+    const TAG = { start:'startEvent', end:'endEvent', xor:'exclusiveGateway' };
+    const inc = (id) => model.edges.filter(e=>e.target===id).map(e=>`      <bpmn:incoming>${xmlEsc(e.id)}</bpmn:incoming>\n`).join('');
+    const out = (id) => model.edges.filter(e=>e.source===id).map(e=>`      <bpmn:outgoing>${xmlEsc(e.id)}</bpmn:outgoing>\n`).join('');
+    let x = `<?xml version="1.0" encoding="UTF-8"?>\n<bpmn:definitions xmlns:bpmn="${NS.bpmn}" xmlns:bpmndi="${NS.bpmndi}" xmlns:dc="${NS.dc}" xmlns:di="${NS.di}" xmlns:xsi="${NS.xsi}" xmlns:fr="${NS.fr}" id="${xmlEsc(m.definitionsId||'Definitions_1')}" targetNamespace="${xmlEsc(m.targetNamespace||'http://flowroute.dev/bpmn')}" exporter="FlowRoute" exporterVersion="0.2">\n`;
+    x += `  <bpmn:process id="${xmlEsc(pid)}" name="${xmlEsc(model.name||'')}" isExecutable="${xmlEsc(m.isExecutable||'false')}">\n`;
+    if ((model.variables||[]).length) x += `    <bpmn:extensionElements>\n${model.variables.map(v=>`      <fr:variable name="${xmlEsc(v.name)}" type="${xmlEsc(v.type)}" value="${xmlEsc(v.value)}"/>\n`).join('')}    </bpmn:extensionElements>\n`;
+    for (const n of model.nodes){ const tag = n.type==='task' ? (n.bpmnType||'task') : n.type==='unsupported' ? n.bpmnType : TAG[n.type];
+      const attrs = [`id="${xmlEsc(n.id)}"`, n.name? `name="${xmlEsc(n.name)}"`:'', n.type==='task'&&n.symbol? `fr:symbol="${xmlEsc(n.symbol)}"`:'', n.type==='xor'? (()=>{ const d=model.edges.find(e=>e.source===n.id&&e.condition?.kind==='default'); return d? `default="${xmlEsc(d.id)}"`:''; })():''].filter(Boolean).join(' ');
+      if (n.type==='unsupported') lost.push(`${n.bpmnType} "${n.id}": se exporta solo con id/nombre y flujos (su contenido interno no se conservó).`);
+      x += `    <bpmn:${tag} ${attrs}>\n${inc(n.id)}${out(n.id)}    </bpmn:${tag}>\n`; }
+    for (const e of model.edges){ const c = e.condition; const expr = (c && c.kind!=='default' && c.kind!=='none') ? conditionToExpression(c) : null;
+      x += `    <bpmn:sequenceFlow id="${xmlEsc(e.id)}" ${e.name? `name="${xmlEsc(e.name)}" `:''}sourceRef="${xmlEsc(e.source)}" targetRef="${xmlEsc(e.target)}"${expr? `>\n      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${xmlEsc(expr)}</bpmn:conditionExpression>\n    </bpmn:sequenceFlow>\n` : '/>\n'}`; }
+    x += `  </bpmn:process>\n  <bpmndi:BPMNDiagram id="BPMNDiagram_1">\n    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="${xmlEsc(pid)}">\n`;
+    const nodes = Formal.byId(model);
+    for (const n of model.nodes){ const s=sizeOf(n); x += `      <bpmndi:BPMNShape id="${xmlEsc(n.id)}_di" bpmnElement="${xmlEsc(n.id)}"><dc:Bounds x="${n.x}" y="${n.y}" width="${s.w}" height="${s.h}"/></bpmndi:BPMNShape>\n`; }
+    for (const e of model.edges){ const a=nodes[e.source], b=nodes[e.target]; if (!a||!b) continue; const sa=sizeOf(a), sb=sizeOf(b); const ca={x:a.x+sa.w/2,y:a.y+sa.h/2}, cb={x:b.x+sb.w/2,y:b.y+sb.h/2}; const wps = (e.waypoints && e.waypoints.length>=2) ? e.waypoints : [borderPoint(a, sa, cb), borderPoint(b, sb, ca)];
+      x += `      <bpmndi:BPMNEdge id="${xmlEsc(e.id)}_di" bpmnElement="${xmlEsc(e.id)}">${wps.map(w=>`<di:waypoint x="${Math.round(w.x)}" y="${Math.round(w.y)}"/>`).join('')}</bpmndi:BPMNEdge>\n`; }
+    x += `    </bpmndi:BPMNPlane>\n  </bpmndi:BPMNDiagram>\n</bpmn:definitions>\n`;
+    if (m.dropped?.length) lost.push(`Elementos descartados en la importación original no se recuperan: ${m.dropped.join(', ')}.`);
+    return { xml:x, lost };
+  }
+  // punto del borde de la figura en dirección a `toward` (rect para tareas, rombo/círculo por radio) — así bpmn-js no dibuja la flecha desde el centro
+  function borderPoint(n, sz, toward){ const cx=n.x+sz.w/2, cy=n.y+sz.h/2; const dx=toward.x-cx, dy=toward.y-cy; if (!dx && !dy) return {x:cx,y:cy};
+    let t; if (n.type==='task' || n.type==='unsupported') t = Math.min(Math.abs(sz.w/2/(dx||1e-9)), Math.abs(sz.h/2/(dy||1e-9))); else if (n.type==='xor') t = (sz.w/2)/(Math.abs(dx)+Math.abs(dy)); else t = (sz.w/2)/Math.hypot(dx,dy);
+    return { x: Math.round(cx+dx*t), y: Math.round(cy+dy*t) }; }
+  // firma semántica del subconjunto soportado, para comprobar exportar→reimportar
+  function signature(model){ const nodes=[...model.nodes].sort((a,b)=>a.id<b.id?-1:1).map(n=>[n.id,n.type,n.bpmnType||'',n.name,n.symbol||''].join('|'));
+    const edges=[...model.edges].sort((a,b)=>a.id<b.id?-1:1).map(e=>[e.id,e.source,e.target,JSON.stringify(e.condition||null)].join('|'));
+    const vars=[...(model.variables||[])].sort((a,b)=>a.name<b.name?-1:1).map(v=>`${v.name}:${v.type}=${v.value}`); return JSON.stringify({nodes,edges,vars,name:model.name}); }
+  return { importXml, exportXml, parseCondition, conditionToExpression, deriveSymbols, signature, SUPPORTED_SUBSET, NS };
+})();
+
+// =====================================================================
+// SERVICIOS — persistencia / import / export
+// =====================================================================
+function validateModelShape(obj){
+  const errs = [];
+  if (!obj || typeof obj !== 'object') return ['El JSON no es un objeto.'];
+  if (!Array.isArray(obj.nodes)) errs.push('Falta la lista "nodes".');
+  if (!Array.isArray(obj.edges)) errs.push('Falta la lista "edges".');
+  if (errs.length) return errs;
+  const ids = new Set();
+  obj.nodes.forEach((n,i) => { if (!n.id) errs.push(`nodes[${i}] sin "id".`); else if (ids.has(n.id)) errs.push(`id duplicado "${n.id}".`); ids.add(n.id);
+    if (!NODE_SIZE[n.type]) errs.push(`nodes[${i}] tipo desconocido "${n.type}".`);
+    if (typeof n.x !== 'number' || typeof n.y !== 'number') errs.push(`nodes[${i}] sin coordenadas numéricas.`); });
+  obj.edges.forEach((e,i) => { if (!e.id) errs.push(`edges[${i}] sin "id".`); if (!ids.has(e.source)) errs.push(`edges[${i}] origen "${e.source}" inexistente.`); if (!ids.has(e.target)) errs.push(`edges[${i}] destino "${e.target}" inexistente.`); });
+  return errs;
+}
+const Storage = {
+  key:'flowroute.model',
+  save(m){ localStorage.setItem(this.key, JSON.stringify(m)); },
+  load(){ try { const s = localStorage.getItem(this.key); return s ? JSON.parse(s) : null; } catch { return null; } }
+};
+
+// =====================================================================
+// UI
+// =====================================================================
+const S = { model:null, sel:null, view:{x:0,y:0,k:1}, run:null, tab:'props', undo:[], redo:[], highlight:{nodes:new Set(), edges:new Set()}, timer:null, inputs:{}, traceWord:'rva' };
+const $ = (s) => document.querySelector(s);
+const svg = $('#svg'), vp = $('#viewport');
+
+function setModel(m, { keepHistory=false } = {}){ S.model = m; if (!keepHistory){ S.undo=[]; S.redo=[]; } S.sel=null; S.run=null; S.highlight={nodes:new Set(),edges:new Set()}; S.inputs = {}; $('#procName').value = m.name || 'Proceso'; renderAll(); fitView(); }
+function commit(){ S.undo.push(JSON.stringify(S.model)); if (S.undo.length>60) S.undo.shift(); S.redo=[]; Storage.save(S.model); }
+function undo(){ if (!S.undo.length) return; S.redo.push(JSON.stringify(S.model)); S.model = JSON.parse(S.undo.pop()); S.sel=null; S.run=null; renderAll(); }
+function redo(){ if (!S.redo.length) return; S.undo.push(JSON.stringify(S.model)); S.model = JSON.parse(S.redo.pop()); S.sel=null; S.run=null; renderAll(); }
+
+// ---------- lienzo ----------
+function nodeAnchor(n, toward){ const sz=sizeOf(n); const cx=n.x+sz.w/2, cy=n.y+sz.h/2; const dx=toward.x-cx, dy=toward.y-cy; if (!dx && !dy) return {x:cx,y:cy};
+  let t; if (n.type==='task' || n.type==='unsupported'){ t = Math.min(Math.abs(sz.w/2/(dx||1e-9)), Math.abs(sz.h/2/(dy||1e-9))); } else { t = (sz.w/2)/Math.hypot(dx,dy); } return { x:cx+dx*t, y:cy+dy*t }; }
+function wrapText(s, maxChars, maxLines){ const words=String(s||'').split(/\s+/).filter(Boolean); const lines=[]; let cur='';
+  for (const w of words){ if ((cur+' '+w).trim().length > maxChars && cur){ lines.push(cur); cur=w; } else cur=(cur+' '+w).trim(); } if (cur) lines.push(cur);
+  if (lines.length > maxLines){ const kept=lines.slice(0,maxLines); kept[maxLines-1]=kept[maxLines-1].slice(0,Math.max(1,maxChars-1))+'…'; return kept; } return lines.length? lines : ['']; }
+function center(n){ const sz=sizeOf(n); return { x:n.x+sz.w/2, y:n.y+sz.h/2 }; }
+function edgeGeom(a, b, back){ const dx=b.x-a.x, dy=b.y-a.y; let c1, c2;
+  if (back) { c1={x:a.x+60,y:a.y+90}; c2={x:b.x-60,y:b.y+90}; }
+  else if (Math.abs(dx) >= Math.abs(dy)) { const c=Math.max(40, Math.abs(dx)/2); c1={x:a.x+c,y:a.y}; c2={x:b.x-c,y:b.y}; }
+  else { const c=Math.max(30, Math.abs(dy)/2)*Math.sign(dy||1); c1={x:a.x,y:a.y+c}; c2={x:b.x,y:b.y-c}; }
+  const pt = (t) => { const u=1-t; return { x:u*u*u*a.x+3*u*u*t*c1.x+3*u*t*t*c2.x+t*t*t*b.x, y:u*u*u*a.y+3*u*u*t*c1.y+3*u*t*t*c2.y+t*t*t*b.y }; };
+  return { d:`M${a.x},${a.y} C${c1.x},${c1.y} ${c2.x},${c2.y} ${b.x},${b.y}`, label: pt(0.55) }; }
+
+function renderCanvas(){
+  const m = S.model; const nodes = Formal.byId(m); const issues = Formal.validate(m);
+  const errNodes = new Set(), errEdges = new Set(); for (const i of issues) if (i.level==='error') for (const id of i.elements) (nodes[id]? errNodes: errEdges).add(id);
+  const unreach = new Set(Formal.reachability(m).unreachable);
+  const visited = new Set(S.run ? S.run.visited : []), traversed = new Set(S.run ? S.run.traversed : []);
+  let out = '', labels = '';
+  for (const e of m.edges){ const a=nodes[e.source], b=nodes[e.target]; if (!a||!b) continue;
+    let geom;
+    if (e.waypoints && e.waypoints.length >= 2){ const w=e.waypoints; const segs=[]; for (let i=1;i<w.length;i++) segs.push(Math.hypot(w[i].x-w[i-1].x, w[i].y-w[i-1].y)); const total=segs.reduce((x,y)=>x+y,0); let acc=0, label=w[0];
+      for (let i=0;i<segs.length;i++){ if (acc+segs[i] >= total*0.55){ const t=(total*0.55-acc)/(segs[i]||1); label={ x:w[i].x+(w[i+1].x-w[i].x)*t, y:w[i].y+(w[i+1].y-w[i].y)*t }; break; } acc+=segs[i]; }
+      geom = { d:`M${w[0].x},${w[0].y} `+w.slice(1).map(p=>`L${p.x},${p.y}`).join(' '), label }; }
+    else { const ca=center(a), cb=center(b); const back = cb.x < ca.x + 20 && Math.abs(cb.y-ca.y) < 60 && a.id!==b.id; const p1=nodeAnchor(a, back? {x:ca.x+1,y:ca.y+200}: cb), p2=nodeAnchor(b, back? {x:cb.x-1,y:cb.y+200}: ca); geom = edgeGeom(p1,p2,back); }
+    const d = geom.d; const cls = ['edge', S.sel?.kind==='edge'&&S.sel.id===e.id?'selected':'', errEdges.has(e.id)?'error':'', traversed.has(e.id)||S.highlight.edges.has(e.id)?'traversed':'', S.highlight.cycleEdges?.has(e.id)?'cycle':'', e.condition?.kind==='default'?'default':''].join(' ');
+    const marker = cls.includes('selected')?'arrowSel': cls.includes('traversed')?'arrowRun': cls.includes('cycle')?'arrowCyc': errEdges.has(e.id)?'arrowErr':'arrow';
+    const label = Formal.condText(e.condition); const mx=geom.label.x, my=geom.label.y;
+    out += `<g class="${cls}" data-edge="${e.id}"><path class="line" d="${d}" marker-end="url(#${marker})"/><path class="hit" d="${d}"/></g>`;
+    if (label) labels += `<g class="${cls}" data-edge="${e.id}"><rect class="lbl-bg" x="${mx-label.length*3.4-4}" y="${my-9}" width="${label.length*6.8+8}" height="16"/><text x="${mx}" y="${my+3}" text-anchor="middle">${esc(label)}</text></g>`; }
+  for (const n of m.nodes){ const sz=sizeOf(n); const cls=['node', n.type, S.sel?.kind==='node'&&S.sel.id===n.id?'selected':'', errNodes.has(n.id)?'error':'', visited.has(n.id)||S.highlight.nodes.has(n.id)?'visited':'', S.run&&S.run.current===n.id&&!['completed'].includes(S.run.status)?'current':'', S.highlight.cycleNodes?.has(n.id)?'cycle':'', unreach.has(n.id)?'unreach':''].join(' ');
+    let shape='', text=''; const cx=sz.w/2, cy=sz.h/2, r=Math.min(sz.w,sz.h)/2-2;
+    if (n.type==='start') { shape=`<circle class="shape" cx="${cx}" cy="${cy}" r="${r}" fill="#dcfce7" stroke="#16a34a"/>`; text=`<text x="${cx}" y="${sz.h+14}" text-anchor="middle">${esc(n.name)}</text>`; }
+    if (n.type==='end') { shape=`<circle class="shape" cx="${cx}" cy="${cy}" r="${r}" fill="#fee2e2" stroke="#dc2626" style="stroke-width:3"/>`; text=`<text x="${cx}" y="${sz.h+14}" text-anchor="middle">${esc(n.name)}</text>`; }
+    if (n.type==='task') { shape=`<rect class="shape" width="${sz.w}" height="${sz.h}" rx="8" fill="#eff6ff" stroke="#2563eb"/>`; const lines=wrapText(n.name, Math.max(6, Math.floor((sz.w-16)/6.6)), Math.max(1, Math.floor((sz.h-18)/14))); const lh=14, y0=cy-((lines.length+1)*lh)/2+11;
+      text=`<text x="${cx}" y="${y0}" text-anchor="middle">${lines.map((l,i)=>`<tspan x="${cx}" dy="${i?lh:0}">${esc(l)}</tspan>`).join('')}</text><text class="sym" x="${cx}" y="${y0+lines.length*lh}" text-anchor="middle" fill="#2563eb">símbolo: ${n.symbol? esc(n.symbol):'—'}</text>`; }
+    if (n.type==='xor') { shape=`<path class="shape" d="M${cx} 0 ${sz.w} ${cy} ${cx} ${sz.h} 0 ${cy}Z" fill="#fffbeb" stroke="#d97706"/><text x="${cx}" y="${cy+7}" text-anchor="middle" font-size="20" font-weight="700" fill="#d97706">×</text>`; text=`<text x="${cx-4}" y="-8" text-anchor="end">${esc(n.name)}</text>`; }
+    if (n.type==='unsupported') { shape=`<rect class="shape" width="${sz.w}" height="${sz.h}" rx="6" fill="#f3f4f6" stroke="#9ca3af" stroke-dasharray="4 3"/>`;
+      text = sz.w < 120 ? `<text x="${cx}" y="${cy+6}" text-anchor="middle" font-size="16">⚠</text><text x="${cx}" y="${sz.h+14}" text-anchor="middle" fill="#4b5563">${esc(n.name)}</text><text class="sym" x="${cx}" y="${sz.h+27}" text-anchor="middle" fill="#9ca3af">${esc(n.bpmnType)}</text>`
+        : `<text x="${cx}" y="${cy-4}" text-anchor="middle" fill="#4b5563">${esc(n.name)}</text><text class="sym" x="${cx}" y="${cy+14}" text-anchor="middle" fill="#9ca3af">⚠ ${esc(n.bpmnType)}</text>`; }
+    const handle = n.type==='end' ? '' : `<circle class="handle" cx="${sz.w+8}" cy="${sz.h/2}" r="6" data-handle="${n.id}"/>`;
+    out += `<g class="${cls}" data-node="${n.id}" transform="translate(${n.x},${n.y})">${shape}${text}${handle}</g>`; }
+  out += labels + `<path id="tempEdge" d=""/>`;
+  vp.innerHTML = out; vp.setAttribute('transform', `translate(${S.view.x},${S.view.y}) scale(${S.view.k})`);
+  // badge y estado
+  const errs = issues.filter(i=>i.level==='error').length, warns = issues.filter(i=>i.level==='warning').length;
+  const vb = $('#validBadge'); vb.className = 'badge ' + (errs? 'err': warns? 'warn':'ok'); vb.textContent = errs? `${errs} error${errs>1?'es':''}` : warns? `${warns} aviso${warns>1?'s':''}` : 'Modelo válido';
+  const st = $('#canvasStatus'); st.innerHTML = S.run ? `<span class="badge ${runBadge(S.run.status)}">Ejecución: ${runLabel(S.run.status)}</span><span class="badge gray mono">${S.run.symbols||'ε'}</span>` : '';
+  renderMinimap();
+}
+function renderMinimap(){ const mm=$('#minimap'); const m=S.model; if (!m.nodes.length){ mm.innerHTML=''; return; }
+  const xs=m.nodes.map(n=>n.x), ys=m.nodes.map(n=>n.y); const minX=Math.min(...xs)-40, minY=Math.min(...ys)-40, maxX=Math.max(...m.nodes.map(n=>n.x+sizeOf(n).w))+40, maxY=Math.max(...m.nodes.map(n=>n.y+sizeOf(n).h))+40;
+  mm.setAttribute('viewBox', `${minX} ${minY} ${maxX-minX} ${maxY-minY}`);
+  const col={start:'#16a34a',end:'#dc2626',task:'#2563eb',xor:'#d97706',unsupported:'#9ca3af'};
+  mm.innerHTML = m.nodes.map(n=>`<rect x="${n.x}" y="${n.y}" width="${sizeOf(n).w}" height="${sizeOf(n).h}" rx="4" fill="${col[n.type]}" opacity=".7"/>`).join('') +
+    (()=>{ const r=svg.getBoundingClientRect(); const x=-S.view.x/S.view.k, y=-S.view.y/S.view.k; return `<rect x="${x}" y="${y}" width="${r.width/S.view.k}" height="${r.height/S.view.k}" fill="none" stroke="#2563eb" stroke-width="${3/Math.max(.2,S.view.k)}"/>`; })(); }
+function fitView(){ const m=S.model; const r=svg.getBoundingClientRect(); if (!m.nodes.length) return;
+  const minX=Math.min(...m.nodes.map(n=>n.x))-40, minY=Math.min(...m.nodes.map(n=>n.y))-40, maxX=Math.max(...m.nodes.map(n=>n.x+sizeOf(n).w))+40, maxY=Math.max(...m.nodes.map(n=>n.y+sizeOf(n).h))+60;
+  const k=Math.min(1.4, r.width/(maxX-minX), r.height/(maxY-minY)); S.view={k, x:(r.width-(maxX-minX)*k)/2-minX*k, y:(r.height-(maxY-minY)*k)/2-minY*k}; renderCanvas(); }
+const runBadge = (s) => ({completed:'ok', error:'err', 'no-match':'err', limit:'warn', incomplete:'warn', running:'run', paused:'run', ready:'gray'})[s] || 'gray';
+const runLabel = (s) => ({ready:'lista', running:'en curso', paused:'en pausa', completed:'completada', error:'error', limit:'límite de pasos', incomplete:'incompleta'})[s] || s;
+
+// ---- interacción con el lienzo ----
+let drag=null;
+const toWorld = (ev) => { const r=svg.getBoundingClientRect(); return { x:(ev.clientX-r.left-S.view.x)/S.view.k, y:(ev.clientY-r.top-S.view.y)/S.view.k }; };
+svg.addEventListener('mousedown', ev => {
+  const h = ev.target.closest('[data-handle]'); const g = ev.target.closest('[data-node]'); const e = ev.target.closest('[data-edge]');
+  if (h){ drag={ type:'connect', from:h.dataset.handle }; ev.preventDefault(); return; }
+  if (g){ const id=g.dataset.node; const n=S.model.nodes.find(x=>x.id===id); const w=toWorld(ev); drag={ type:'node', id, ox:w.x-n.x, oy:w.y-n.y, moved:false }; select({kind:'node',id}); return; }
+  if (e){ select({kind:'edge',id:e.dataset.edge}); return; }
+  drag={ type:'pan', sx:ev.clientX, sy:ev.clientY, vx:S.view.x, vy:S.view.y }; svg.classList.add('panning'); select(null);
+});
+window.addEventListener('mousemove', ev => { if (!drag) return;
+  if (drag.type==='pan'){ S.view.x=drag.vx+ev.clientX-drag.sx; S.view.y=drag.vy+ev.clientY-drag.sy; vp.setAttribute('transform', `translate(${S.view.x},${S.view.y}) scale(${S.view.k})`); renderMinimap(); }
+  if (drag.type==='node'){ const w=toWorld(ev); const n=S.model.nodes.find(x=>x.id===drag.id); if (!drag.moved){ commit(); drag.moved=true; for (const e of S.model.edges) if (e.source===drag.id || e.target===drag.id) delete e.waypoints; } n.x=Math.round(w.x-drag.ox); n.y=Math.round(w.y-drag.oy); renderCanvas(); }
+  if (drag.type==='connect'){ const n=S.model.nodes.find(x=>x.id===drag.from); const c=center(n); const w=toWorld(ev); $('#tempEdge').setAttribute('d', `M${c.x},${c.y} L${w.x},${w.y}`); }
+});
+window.addEventListener('mouseup', ev => { if (!drag) return; svg.classList.remove('panning');
+  if (drag.type==='connect'){ $('#tempEdge').setAttribute('d',''); const g = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('[data-node]'); if (g && g.dataset.node!==drag.from) addEdge(drag.from, g.dataset.node); }
+  drag=null; });
+svg.addEventListener('wheel', ev => { ev.preventDefault(); const r=svg.getBoundingClientRect(); const mx=ev.clientX-r.left, my=ev.clientY-r.top; const k=Math.min(3, Math.max(.25, S.view.k*(ev.deltaY<0?1.1:.9)));
+  S.view.x = mx-(mx-S.view.x)*k/S.view.k; S.view.y = my-(my-S.view.y)*k/S.view.k; S.view.k=k; renderCanvas(); }, { passive:false });
+$('#zoomIn').onclick = () => { S.view.k=Math.min(3,S.view.k*1.2); renderCanvas(); };
+$('#zoomOut').onclick = () => { S.view.k=Math.max(.25,S.view.k/1.2); renderCanvas(); };
+$('#fitView').onclick = fitView;
+$('#toggleLeft').onclick = () => $('#app').classList.toggle('hide-left');
+$('#toggleRight').onclick = () => $('#app').classList.toggle('hide-right');
+window.addEventListener('resize', renderMinimap);
+
+function select(sel){ S.sel=sel; if (sel) { S.tab='props'; } renderAll(); }
+function addNode(type){ const r=svg.getBoundingClientRect(); const w={ x:(r.width/2-S.view.x)/S.view.k, y:(r.height/2-S.view.y)/S.view.k };
+  if (type==='start' && S.model.nodes.some(n=>n.type==='start')){ toast('Ya existe un evento de inicio: el AFD admite un único q0.'); return; }
+  commit(); const n={ id:uid(type), type, name: {start:'Inicio',task:'Nueva tarea',xor:'Decisión',end:'Fin'}[type], x:Math.round(w.x-NODE_SIZE[type].w/2+(Math.random()*40-20)), y:Math.round(w.y-NODE_SIZE[type].h/2+(Math.random()*40-20)) };
+  if (type==='task') n.symbol = freeSymbol(); S.model.nodes.push(n); select({kind:'node',id:n.id}); }
+function freeSymbol(){ const used=new Set(S.model.nodes.map(n=>n.symbol)); for (const c of 'abcdefghijklmnopqrstuvwxyz') if (!used.has(c)) return c; return ''; }
+function addEdge(from, to){ const a=S.model.nodes.find(n=>n.id===from), b=S.model.nodes.find(n=>n.id===to);
+  if (b.type==='start'){ toast('El inicio no puede recibir flujos.'); return; } if (a.type==='end'){ toast('Un fin no puede tener salidas.'); return; }
+  if (S.model.edges.some(e=>e.source===from&&e.target===to)){ toast('Ese flujo ya existe.'); return; }
+  commit(); const e={ id:uid('f'), source:from, target:to }; if (a.type==='xor') e.condition={ kind: S.model.edges.some(x=>x.source===from)? 'none':'default' }; S.model.edges.push(e); select({kind:'edge',id:e.id}); }
+function deleteSelected(){ if (!S.sel) return; commit();
+  if (S.sel.kind==='node'){ S.model.nodes=S.model.nodes.filter(n=>n.id!==S.sel.id); S.model.edges=S.model.edges.filter(e=>e.source!==S.sel.id&&e.target!==S.sel.id); }
+  else S.model.edges=S.model.edges.filter(e=>e.id!==S.sel.id); S.sel=null; S.run=null; renderAll(); }
+document.addEventListener('keydown', ev => { const tag=ev.target.tagName; if (tag==='INPUT'||tag==='SELECT'||tag==='TEXTAREA') return;
+  if (ev.key==='Delete'||ev.key==='Backspace') deleteSelected();
+  if ((ev.ctrlKey||ev.metaKey) && ev.key==='z'){ ev.preventDefault(); undo(); } if ((ev.ctrlKey||ev.metaKey) && (ev.key==='y' || (ev.shiftKey&&ev.key==='Z'))){ ev.preventDefault(); redo(); } });
+function toast(msg){ const t=document.createElement('div'); t.className='card warn'; t.style.cssText='position:fixed;top:56px;left:50%;transform:translateX(-50%);z-index:9;box-shadow:0 4px 12px rgba(0,0,0,.12)'; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(), 2600); }
+
+// ---------- panel derecho ----------
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { S.tab=b.dataset.tab; renderRight(); });
+function renderRight(){ document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active', b.dataset.tab===S.tab));
+  const body=$('#tabbody'); body.innerHTML = { props:renderProps, exec:renderExec, trace:renderTrace, analysis:renderAnalysis }[S.tab](); bindRight(body); }
+function renderAll(){ renderCanvas(); renderRight(); $('#btnUndo').disabled=!S.undo.length; $('#btnRedo').disabled=!S.redo.length; }
+
+function renderProps(){
+  const m=S.model; if (!S.sel) return `<h3>Inspector</h3><p class="empty">Selecciona un nodo o un flujo del lienzo.</p>
+    <div class="kv" style="margin-top:12px"><b>Nodos</b><span>${m.nodes.length}</span><b>Flujos</b><span>${m.edges.length}</span><b>Variables</b><span>${(m.variables||[]).map(v=>v.name).join(', ')||'—'}</span></div>`;
+  if (S.sel.kind==='node'){ const n=m.nodes.find(x=>x.id===S.sel.id); if (!n) return '';
+    const bpmnTag = n.type==='task'? (n.bpmnType||'task') : n.type==='unsupported'? n.bpmnType : {start:'startEvent',end:'endEvent',xor:'exclusiveGateway'}[n.type];
+    return `<h3>${TYPE_LABEL[n.type]}</h3>
+      ${n.type==='unsupported'? `<div class="card err"><div class="title">&lt;${esc(n.bpmnType)}&gt; sin semántica</div><div class="hint">Se importó para no perderlo y se exportará con su id, nombre y flujos, pero el motor no lo ejecuta ni deriva estados de él. Elimínalo o sustitúyelo para poder analizar el proceso.</div></div>`:''}
+      <div class="field"><label>Nombre</label><input data-prop="name" value="${esc(n.name)}"></div>
+      ${n.type==='task'? `<div class="field"><label>Símbolo (un carácter, único en Σ) ${n.symbolSource==='derived'?'<span class="badge gray">derivado del nombre</span>': n.symbolSource==='bpmn'?'<span class="badge gray">fr:symbol del archivo</span>':''}</label><input data-prop="symbol" maxlength="1" class="mono" value="${esc(n.symbol||'')}"></div>
+        <div class="field"><label>Tipo BPMN</label><select data-prop="bpmnType">${['task','userTask','serviceTask','scriptTask','manualTask','sendTask','receiveTask','businessRuleTask'].map(t=>`<option ${t===(n.bpmnType||'task')?'selected':''}>${t}</option>`).join('')}</select></div>`:''}
+      ${n.type==='xor'? `<p class="hint">Salidas: ${Formal.outEdges(m,n.id).length}. Selecciona cada flujo de salida para definir su condición o marcarlo como salida por defecto (atributo <code>default</code> en BPMN).</p>`:''}
+      <div class="kv"><b>id BPMN</b><span class="mono">${esc(n.id)}</span><b>elemento</b><span class="mono">bpmn:${esc(bpmnTag)}</span><b>Estado AFD</b><span class="mono">${esc(Formal.buildAFD(m).stateOf[n.id] || (n.type==='xor'?'— (ε, transparente)': n.type==='end'?'— (marca aceptación)':'—'))}</span></div>
+      <div style="margin-top:12px"><button data-act="delete" class="small">Eliminar</button></div>`; }
+  const e=m.edges.find(x=>x.id===S.sel.id); if (!e) return ''; const a=m.nodes.find(x=>x.id===e.source), b=m.nodes.find(x=>x.id===e.target); const c=e.condition||{kind:'none'};
+  const vars=m.variables||[];
+  return `<h3>Flujo de secuencia</h3><div class="kv"><b>Origen</b><span>${esc(a?.name)}</span><b>Destino</b><span>${esc(b?.name)}</span></div>
+    ${a?.type==='xor'? `<h4>Condición</h4>
+      <div class="field"><label>Tipo</label><select data-cond="kind"><option value="none" ${c.kind==='none'?'selected':''}>— sin condición (error)</option><option value="compare" ${c.kind==='compare'?'selected':''}>Comparación variable</option><option value="literal" ${c.kind==='literal'?'selected':''}>Literal true/false</option><option value="default" ${c.kind==='default'?'selected':''}>Salida por defecto</option></select></div>
+      ${c.kind==='compare'? `<div class="row"><div class="field"><label>Variable</label><select data-cond="variable">${vars.map(v=>`<option ${v.name===c.variable?'selected':''}>${esc(v.name)}</option>`).join('')}${vars.some(v=>v.name===c.variable)||!c.variable?'':`<option selected>${esc(c.variable)}</option>`}</select></div>
+        <div class="field" style="flex:.5"><label>Op.</label><select data-cond="op">${['==','!=','<','<=','>','>='].map(o=>`<option ${o===c.op?'selected':''}>${o}</option>`).join('')}</select></div>
+        <div class="field"><label>Valor</label><input data-cond="value" value="${esc(c.value??'')}"></div></div>`:''}
+      ${c.kind==='literal'? `<div class="field"><label>Valor</label><select data-cond="value"><option ${String(c.value)==='true'?'selected':''}>true</option><option ${String(c.value)==='false'?'selected':''}>false</option></select></div>`:''}
+      <p class="hint">Semántica XOR: una condición verdadera → esa salida; ninguna → salida por defecto si existe, si no error; varias verdaderas → conflicto (no se elige ninguna).</p>`
+    : `<p class="hint">Flujo sin condición: solo las salidas de una XOR llevan condiciones.</p>`}
+    <div style="margin-top:12px"><button data-act="delete" class="small">Eliminar</button></div>`;
+}
+
+function renderExec(){
+  const m=S.model; const run=S.run; const vars=m.variables||[]; const issues=Formal.validate(m).filter(i=>i.level==='error');
+  return `<h3>Datos de entrada</h3>
+    ${vars.length? vars.map((v,i)=>`<div class="row field"><div style="flex:1.3"><label>${esc(v.name)} <span class="muted">(${v.type})</span></label></div>
+      <div>${v.type==='boolean'? `<select data-var="${i}"><option ${String(v.value)==='true'?'selected':''}>true</option><option ${String(v.value)==='false'?'selected':''}>false</option></select>` : `<input data-var="${i}" type="${v.type==='number'?'number':'text'}" value="${esc(v.value??'')}">`}</div>
+      <button class="small" data-delvar="${i}" style="flex:0" title="Eliminar variable">✕</button></div>`).join('') : '<p class="empty">Sin variables.</p>'}
+    <div class="row" style="margin-top:6px"><input id="newVarName" placeholder="nueva variable"><select id="newVarType" style="flex:.7"><option value="boolean">boolean</option><option value="number">number</option><option value="string">string</option></select><button class="small" data-act="addvar" style="flex:0">＋</button></div>
+    <div class="field" style="margin-top:10px"><label>Límite de pasos</label><input id="maxSteps" type="number" min="1" value="${run?run.maxSteps:50}"></div>
+    <h3 style="margin-top:14px">Control</h3>
+    ${issues.length? `<div class="card err"><div class="title">No se puede ejecutar</div>${issues.length} error${issues.length>1?'es':''} estructural${issues.length>1?'es':''}. Revisa la pestaña Análisis.</div>`:''}
+    <div class="row" style="flex-wrap:wrap">
+      <button data-act="start" class="primary" ${issues.length?'disabled':''}>${run?'Reiniciar':'Iniciar'}</button>
+      <button data-act="step" ${!run||!['ready','running','paused'].includes(run.status)?'disabled':''}>Paso ▸</button>
+      <button data-act="auto" ${!run||!['ready','running','paused'].includes(run.status)?'disabled':''}>${S.timer?'Pausar ❚❚':'Auto ▶▶'}</button>
+      <button data-act="clear" ${!run?'disabled':''}>Limpiar</button></div>
+    ${run? `<div class="card ${runBadge(run.status)}" style="margin-top:10px"><div class="title">Estado: ${runLabel(run.status)} <span class="badge ${runBadge(run.status)}">${run.steps} paso${run.steps!==1?'s':''}</span></div>${esc(run.message)}</div>
+      <h3>Nodo actual</h3><p>${esc(m.nodes.find(n=>n.id===run.current)?.name||'—')} <span class="muted mono">(${Formal.buildAFD(m).stateOf[run.current]||'—'})</span></p>
+      <h3>Secuencia de símbolos</h3><div class="symline">${esc(run.symbols)||'<span class="muted">ε</span>'}</div>
+      <div style="margin:6px 0"><button class="small" data-act="tovalidator" ${!run.symbols?'disabled':''}>Validar esta traza en el AFD →</button></div>
+      <h3>Historial de tareas</h3>${run.history.length? `<ol class="history">${run.history.map(h=>`<li>${esc(h.name)} <span class="mono muted">«${esc(h.symbol)}»</span></li>`).join('')}</ol>`:'<p class="empty">Ninguna tarea ejecutada.</p>'}
+      <h3>Decisiones en compuertas</h3>${run.decisions.length? run.decisions.map(d=>`<div class="card ${d.status==='ok'||d.status==='default'?'ok':'err'}"><div class="title">${esc(d.name)}</div><div class="hint">${esc(d.message)}</div><ul class="hint">${d.evals.map(x=>`<li class="mono">${esc(Formal.condText(x.edge.condition))||'—'} → ${x.res.error? 'error: '+esc(x.res.error) : x.res.matched?'verdadera':'falsa'}</li>`).join('')}</ul></div>`).join('') : '<p class="empty">Ninguna decisión todavía.</p>'}`
+    : `<p class="hint" style="margin-top:10px">Define los datos y pulsa <b>Iniciar</b>. Cada paso recorre un flujo; en las XOR se evalúan las condiciones con los datos de entrada.</p>`}`;
+}
+
+function renderTrace(){
+  const m=S.model; const afd=Formal.buildAFD(m); const w=S.traceWord; const res = Formal.runTrace(afd, w);
+  const paths = Formal.completePaths(m, 6).paths; const sug = new Set(paths.map(p=>p.symbols)); const base = paths[0]?.symbols || '';
+  // ejemplos derivados del modelo actual (no hardcodeados)
+  const examples = [...sug]; if (base.length>1){ examples.push(base.slice(0, base.length-1)); examples.push(base[0] + base.slice(2)); examples.push(base + base[base.length-1]); }
+  const uniq=[...new Set(examples.filter(Boolean))].slice(0,6);
+  const cls = res.status==='accepted'?'ok': res.status==='incomplete'?'warn':'err';
+  return `<h3>Validador de trazas</h3><p class="hint">Σ = { ${afd.alphabet.map(s=>`<code>${esc(s)}</code>`).join(', ')||'∅'} } · q0 = ${afd.q0||'—'} · F = { ${[...afd.accepting].join(', ')||'∅'} }</p>
+    <div class="row field"><input id="traceInput" class="mono" value="${esc(w)}" placeholder="p. ej. rva"><button class="small primary" data-act="validate" style="flex:0">Validar</button></div>
+    <div class="row" style="flex-wrap:wrap;gap:4px">${uniq.map(x=>`<span class="chip mono" data-trace="${esc(x)}">${esc(x)}</span>`).join('')}</div>
+    <div class="card ${cls}" style="margin-top:10px"><div class="title">${{accepted:'Aceptada ✔', incomplete:'Prefijo válido, incompleta', invalid:'Inválida ✖'}[res.status]}</div><div class="hint">${esc(res.message)}</div></div>
+    <h3>Estados recorridos</h3><div class="trace-steps"><span class="ts ${afd.q0&&res.steps.length===0&&res.status==='invalid'?'err':''}">${afd.q0||'∅'}</span>${res.steps.map((s,i)=>`<span class="muted">—${esc(s.sym)}→</span><span class="ts ${s.to===afd.sink?'err': (i===res.steps.length-1 && res.status==='accepted')?'acc':'ok'}">${s.to}</span>`).join('')}${res.status==='invalid'&&res.position!==undefined&&res.steps.length<w.length? `<span class="muted">—${esc(w[res.position]||'')}→</span><span class="ts err">qError</span>`:''}</div>
+    <div style="margin:6px 0"><button class="small" data-act="highlighttrace">Resaltar en el lienzo</button> <button class="small" data-act="clearhl">Quitar resaltado</button></div>
+    <p class="hint">Un prefijo válido no es una ejecución completa: solo se acepta una secuencia que termina en un estado de F (tras una tarea desde la que se alcanza un fin).</p>`;
+}
+
+function renderAnalysis(){
+  const m=S.model; const issues=Formal.validate(m); const afd=Formal.buildAFD(m); const reach=Formal.reachability(m); const cyc=Formal.cycles(m); const paths=Formal.completePaths(m); const nodes=Formal.byId(m);
+  const vars=Formal.varsFromModel(m); const rd=Formal.reachabilityWithData(m, vars);
+  const name=(id)=>esc(nodes[id]?.name || m.edges.find(e=>e.id===id)&&'flujo' || id);
+  const chips=(ids)=>`<div class="els">${ids.map(id=>`<span class="chip" data-focus="${esc(id)}">${name(id)}</span>`).join('')}</div>`;
+  return `<h3>A · Validación estructural</h3>
+    ${issues.length? issues.map(i=>`<div class="card ${i.level==='error'?'err':'warn'}"><div class="title">${i.level==='error'?'Error':'Aviso'} <span class="muted mono" style="font-weight:400">${i.code}</span></div><div class="hint">${esc(i.message)}${i.action?` <b>Acción:</b> ${esc(i.action)}`:''}</div>${i.elements.length?chips(i.elements):''}</div>`).join('') : '<div class="card ok"><div class="title">Sin problemas estructurales</div><div class="hint">El modelo puede transformarse en AFD y ejecutarse.</div></div>'}
+    ${afd.issues.map(x=>`<div class="card err"><div class="title">Modelo formal</div><div class="hint">${esc(x)}</div></div>`).join('')}
+    <h3 style="margin-top:14px">B · Alcanzabilidad</h3>
+    <div class="card info"><div class="title">Estructural: ${reach.reachable.length}/${m.nodes.length} nodos</div><div class="hint">Alcanzables desde el inicio por algún recorrido del grafo, sin evaluar condiciones.</div>${reach.unreachable.length? `<div class="hint"><b>Inalcanzables:</b></div>${chips(reach.unreachable)}`:''}</div>
+    <div class="card info"><div class="title">Con los datos actuales: ${rd.reachable.length}/${m.nodes.length} nodos</div><div class="hint">Vars: <code>${esc(JSON.stringify(vars))}</code>. Solo se abre la salida XOR que eligen estos datos.</div>${chips(m.nodes.filter(n=>!rd.reachable.includes(n.id)).map(n=>n.id))}${m.nodes.some(n=>!rd.reachable.includes(n.id))?'<div class="hint">(no alcanzables con estos datos)</div>':''}</div>
+    <h3 style="margin-top:14px">C · Ciclos</h3>
+    ${cyc.cycles.length? cyc.cycles.map((c,i)=>`<div class="card warn"><div class="title">Ciclo ${i+1} (${c.length} nodos) <button class="small" data-cycle="${i}">Resaltar</button></div>${chips(c)}<div class="hint">Un ciclo no implica ejecuciones infinitas: es opcional y la terminación depende de la ruta y de las condiciones. El motor lo acota con el límite de pasos.</div></div>`).join('') : '<div class="card ok"><div class="title">Sin ciclos</div><div class="hint">El grafo es acíclico: toda ejecución termina en un número finito de pasos.</div></div>'}
+    ${cyc.truncated?'<p class="hint">Enumeración parcial por límite.</p>':''}
+    <h3 style="margin-top:14px">D · Rutas completas inicio → fin</h3>
+    ${paths.paths.length? `<table><tr><th>#</th><th>Traza</th><th>Ruta</th></tr>${paths.paths.map((p,i)=>`<tr><td>${i+1}</td><td class="mono"><span class="chip" data-trace="${esc(p.symbols)}">${esc(p.symbols)||'ε'}</span></td><td class="hint">${p.nodes.map(id=>name(id)).join(' → ')}</td></tr>`).join('')}</table>` : '<div class="card err"><div class="title">Ninguna ruta completa</div><div class="hint">No existe un camino del inicio a un evento de fin.</div></div>'}
+    <p class="hint">${cyc.cycles.length? 'Solo se enumeran caminos simples (sin repetir nodos); con ciclos el lenguaje es infinito y el listado es parcial.':''}${paths.truncated?' Lista truncada por límite.':''}</p>
+    <h3 style="margin-top:14px">E · Alfabeto Σ ↔ elementos BPMN</h3>
+    ${m.nodes.some(n=>n.type==='task')? `<table><tr><th>Símbolo</th><th>id BPMN</th><th>Actividad</th><th>Origen</th></tr>${m.nodes.filter(n=>n.type==='task').map(t=>`<tr><td class="mono"><b>${esc(t.symbol)||'—'}</b></td><td class="mono"><span class="chip" data-focus="${esc(t.id)}">${esc(t.id)}</span></td><td>${esc(t.name)} <span class="muted">(${esc(t.bpmnType||'task')})</span></td><td class="muted">${{bpmn:'fr:symbol',derived:'derivado del nombre',manual:'editado'}[t.symbolSource]||'editor'}</td></tr>`).join('')}</table>
+    <p class="hint">Correspondencia reproducible: se usa <code>fr:symbol</code> si existe; si no, la primera letra libre del nombre normalizado, luego a–z, en orden de documento. Al exportar, el símbolo se escribe como <code>fr:symbol</code>.</p>` : '<p class="empty">Sin actividades: Σ = ∅.</p>'}
+    ${m.meta?.source==='bpmn'? `<div class="kv" style="margin-top:6px"><b>Archivo</b><span>${esc(m.meta.fileName||'—')}</span><b>process id</b><span class="mono">${esc(m.meta.processId)}</span>${m.meta.dropped?.length? `<b>Descartado</b><span>${esc(m.meta.dropped.join(', '))}</span>`:''}</div>`:''}
+    <h3 style="margin-top:14px">F · AFD y aceptación</h3>
+    <div class="kv"><b>Q</b><span class="mono">{ ${afd.states.map(s=>s.id).join(', ')} }</span><b>Σ</b><span class="mono">{ ${afd.alphabet.join(', ')||'∅'} }</span><b>q0</b><span class="mono">${afd.q0||'—'}</span><b>F</b><span class="mono">{ ${[...afd.accepting].join(', ')||'∅'} }</span></div>
+    <h4>Función de transición δ</h4>
+    <table><tr><th>Estado</th>${afd.alphabet.map(s=>`<th class="mono">${esc(s)}</th>`).join('')}</tr>${afd.states.map(s=>`<tr><td class="${afd.accepting.has(s.id)?'acc':''}" title="${esc(s.label)}"><span class="mono">${s.id}</span>${afd.accepting.has(s.id)?' ∈F':''}<br><span class="muted" style="font-size:10px">${esc(s.nodeId? nodes[s.nodeId]?.name : 'sumidero')}</span></td>${afd.alphabet.map(a=>{const t=afd.delta[`${s.id}|${a}`];return `<td class="mono ${t===afd.sink?'sink':''}">${t===afd.sink?'qErr':t}</td>`;}).join('')}</tr>`).join('')}</table>
+    <p class="hint">Una ejecución se <b>acepta</b> cuando la secuencia de símbolos lleva de q0 a un estado de F: un punto de control desde el que se alcanza un evento de fin. qError completa δ como función total y no es un fin del proceso.</p>
+    <h4>Limitaciones del formalismo y del subconjunto BPMN</h4>
+    <p class="hint">· Un estado por punto de control: basta para inicio/tarea/XOR/fin con símbolos únicos. · Las condiciones XOR no están en el AFD (solo en la ejecución con datos), así que el autómata acepta cualquier rama estructural. · Dos tareas con el mismo símbolo rompen el determinismo. · Con ciclos el lenguaje es infinito: no se enumeran cadenas, se analiza el grafo (DFS) y el autómata (δ). · Compuertas AND/OR, subprocesos, eventos intermedios/de borde, pools y flujos de mensaje se reconocen al importar pero no tienen semántica: requieren estados de configuración (varias ramas activas), no una conversión nodo→estado. No se afirma compatibilidad completa con BPMN 2.0.</p>`;
+}
+
+// ---------- pruebas integradas (sin framework): importación, alfabeto, trazas, exportar→reimportar ----------
+const SelfTests = [
+  ['XML mal formado se rechaza con mensaje', () => { const r=Bpmn.importXml('<bpmn:definitions><bpmn:process>'); assert(!r.ok && /mal formado/.test(r.errors[0]), r.errors?.[0]); }],
+  ['Raíz fuera del namespace BPMN se rechaza', () => { const r=Bpmn.importXml('<definitions xmlns="http://otro"><process id="p"/></definitions>'); assert(!r.ok && /namespace/.test(r.errors[0]), r.errors?.[0]); }],
+  ['Referencia a nodo inexistente se detecta', () => { const r=Bpmn.importXml(`<bpmn:definitions xmlns:bpmn="${Bpmn.NS.bpmn}"><bpmn:process id="p"><bpmn:startEvent id="s"/><bpmn:sequenceFlow id="f" sourceRef="s" targetRef="nope"/></bpmn:process></bpmn:definitions>`); assert(!r.ok && r.errors.some(e=>/"nope" no existe/.test(e)), r.errors.join('; ')); }],
+  ['Importa solicitud.bpmn por tipo/id/referencias (no por nombres)', () => { const r=Bpmn.importXml(EXAMPLES_BPMN.solicitud); assert(r.ok, r.errors?.join('; ')); const m=r.model; const by=Formal.byId(m);
+    assert(m.nodes.length===8 && m.edges.length===7, `${m.nodes.length} nodos / ${m.edges.length} flujos`); assert(by.Task_Validar.type==='task' && by.Task_Validar.bpmnType==='serviceTask', 'serviceTask → task'); assert(by.Gateway_Valida.type==='xor' && by.StartEvent_1.type==='start' && by.EndEvent_Rechazado.type==='end');
+    const f=m.edges.find(e=>e.id==='Flow_Aprobar'); assert(f.source==='Gateway_Valida' && f.target==='Task_Aprobar' && f.condition.kind==='compare' && f.condition.variable==='solicitudValida' && f.condition.value==='true', JSON.stringify(f.condition));
+    assert(m.variables.some(v=>v.name==='solicitudValida' && v.type==='boolean'), 'variable desde fr:variable'); assert(by.Task_Recibir.x===240 && by.Task_Recibir.y===160 && by.Task_Recibir.w===100 && by.Task_Recibir.h===80, 'coordenadas y tamaño DI'); assert(m.edges.every(e=>e.waypoints && e.waypoints.length>=2), 'waypoints de todos los flujos'); }],
+  ['Alfabeto desde fr:symbol: Σ = {a,j,r,v} con correspondencia símbolo↔id', () => { const m=Bpmn.importXml(EXAMPLES_BPMN.solicitud).model; const afd=Formal.buildAFD(m); assert(afd.alphabet.join('')==='ajrv', afd.alphabet.join(','));
+    const map=Object.fromEntries(m.nodes.filter(n=>n.type==='task').map(t=>[t.symbol,t.id])); assert(map.r==='Task_Recibir' && map.v==='Task_Validar' && map.a==='Task_Aprobar' && map.j==='Task_Rechazar', JSON.stringify(map)); assert(m.nodes.filter(n=>n.type==='task').every(t=>t.symbolSource==='bpmn')); }],
+  ['Alfabeto derivado del nombre cuando falta fr:symbol: determinista y único', () => { const a=Bpmn.importXml(EXAMPLES_BPMN.ciclo).model, b=Bpmn.importXml(EXAMPLES_BPMN.ciclo).model; const ta=a.nodes.filter(n=>n.type==='task'); assert(ta.every(t=>t.symbol.length===1 && t.symbolSource==='derived')); assert(new Set(ta.map(t=>t.symbol)).size===ta.length, 'símbolos únicos');
+    assert(Bpmn.signature(a)===Bpmn.signature(b), 'misma derivación en dos importaciones'); const by=Formal.byId(a); assert(by.Task_Registrar.symbol==='r' && by.Task_Revisar.symbol==='e' && by.Task_Corregir.symbol==='c' && by.Task_Confirmar.symbol==='o', ta.map(t=>t.id+'→'+t.symbol).join(', ')); }],
+  ['Atributo default de la XOR → salida por defecto; condición sin ${} se parsea', () => { const m=Bpmn.importXml(EXAMPLES_BPMN.ciclo).model; assert(m.edges.find(e=>e.id==='Flow_Confirmar').condition.kind==='default'); const c=m.edges.find(e=>e.id==='Flow_Corregir').condition; assert(c.kind==='compare' && c.variable==='requiereCorreccion' && c.op==='==' && c.value==='true', JSON.stringify(c)); assert(m.variables.some(v=>v.name==='requiereCorreccion'), 'variable implícita declarada'); }],
+  ['Parser de condiciones: subconjunto seguro, sin eval', () => { const p=Bpmn.parseCondition; assert(p('${monto > 100}').kind==='compare' && p('${monto > 100}').value==='100'); assert(p('tipo === "vip"').op==='==' && p('tipo === "vip"').value==='vip'); assert(p('${true}').kind==='literal'); assert(p('a > 1 && b').kind==='unsupported'); assert(p('Math.random() > 0.5').kind==='unsupported'); assert(p('   ')===null); }],
+  ['Trazas sobre el AFD de solicitud.bpmn', () => { const afd=Formal.buildAFD(Bpmn.importXml(EXAMPLES_BPMN.solicitud).model); const t=(w)=>Formal.runTrace(afd,w);
+    assert(t('rva').status==='accepted' && t('rvj').status==='accepted'); assert(t('rv').status==='incomplete'); assert(t('ra').status==='invalid' && t('ra').position===1); assert(t('rvaa').status==='invalid' && t('rvaa').position===3); assert(t('rvz').status==='invalid' && /no pertenece/.test(t('rvz').message)); assert(t('').status==='incomplete'); }],
+  ['Evaluador XOR: conflicto y ausencia de salida se informan, no se eligen', () => { const outs=[{id:'a',condition:{kind:'compare',variable:'x',op:'>',value:'1'}},{id:'b',condition:{kind:'compare',variable:'x',op:'>',value:'0'}}]; assert(Formal.decide(outs,{x:5}).status==='conflict'); assert(Formal.decide(outs,{x:-1}).status==='no-match'); assert(Formal.decide(outs.concat([{id:'d',condition:{kind:'default'}}]),{x:-1}).chosen.id==='d'); assert(Formal.decide(outs,{}).status==='error', 'variable no definida'); }],
+  ['Ciclo: detección por DFS y ejecución acotada por límite de pasos', () => { const m=Bpmn.importXml(EXAMPLES_BPMN.ciclo).model; const c=Formal.cycles(m); assert(c.cycles.length===1 && c.cycles[0].length===3, JSON.stringify(c.cycles));
+    let run=Formal.createRun(m,{requiereCorreccion:true},12); while(['ready','running'].includes(run.status)) Formal.step(m,run); assert(run.status==='limit', run.status);
+    run=Formal.createRun(m,{requiereCorreccion:false},50); while(['ready','running'].includes(run.status)) Formal.step(m,run); assert(run.status==='completed' && run.symbols==='reo', run.symbols); assert(Formal.runTrace(Formal.buildAFD(m), 'receo').status==='accepted', 'el AFD acepta una vuelta del ciclo'); }],
+  ['Exportar → reimportar conserva ids, tipos, símbolos, condiciones y default', () => { for (const k of ['solicitud','ciclo']){ const m=Bpmn.importXml(EXAMPLES_BPMN[k]).model; const {xml}=Bpmn.exportXml(m); const doc=new DOMParser().parseFromString(xml,'application/xml'); assert(!doc.getElementsByTagName('parsererror').length, 'XML exportado bien formado');
+    assert(/fr:symbol="r"/.test(xml) && /conditionExpression xsi:type="bpmn:tFormalExpression"/.test(xml), 'símbolos y condiciones serializados'); if (k==='ciclo') assert(/default="Flow_Confirmar"/.test(xml), 'atributo default'); assert(/bpmndi:BPMNShape/.test(xml) && /di:waypoint/.test(xml), 'DI exportado');
+    const r2=Bpmn.importXml(xml); assert(r2.ok, r2.errors?.join('; ')); assert(Bpmn.signature(r2.model)===Bpmn.signature(m), `firma distinta en ${k}`); assert(r2.model.nodes.every(n=>{ const o=Formal.byId(m)[n.id]; return o && o.x===n.x && o.y===n.y; }), 'coordenadas conservadas'); } }],
+  ['Elementos no soportados: se reconocen, bloquean el análisis y no se simulan', () => { const r=Bpmn.importXml(EXAMPLES_BPMN.paralelo); assert(r.ok, r.errors?.join('; ')); const m=r.model; const un=m.nodes.filter(n=>n.type==='unsupported'); assert(un.length===3 && un.filter(n=>n.bpmnType==='parallelGateway').length===2 && un.some(n=>n.bpmnType==='intermediateCatchEvent'), un.map(n=>n.bpmnType).join(','));
+    assert(Formal.validate(m).filter(i=>i.code==='unsupported').length===3); assert(m.meta.dropped.some(d=>/textAnnotation/.test(d)) && m.meta.dropped.some(d=>/association/.test(d)), 'anotación y asociación descartadas e informadas'); assert(r.warnings.some(w=>/no soportados/.test(w)));
+    let run=Formal.createRun(m,{},20); while(['ready','running'].includes(run.status)) Formal.step(m,run); assert(run.status==='error' && /parallelGateway/.test(run.message), run.message);
+    assert(m.nodes.every(n=>typeof n.x==='number') && new Set(m.nodes.map(n=>n.x+','+n.y)).size===m.nodes.length, 'posiciones DI'); const r2=Bpmn.importXml(Bpmn.exportXml(m).xml); assert(r2.ok && r2.model.nodes.filter(n=>n.bpmnType==='parallelGateway').length===2, 'no soportados conservados al reexportar'); }],
+  ['DI externo (tamaños estándar y waypoints) se respeta y se conserva al reexportar', () => { const xml=`<bpmn:definitions xmlns:bpmn="${Bpmn.NS.bpmn}" xmlns:bpmndi="${Bpmn.NS.bpmndi}" xmlns:dc="${Bpmn.NS.dc}" xmlns:di="${Bpmn.NS.di}" id="D"><bpmn:process id="P"><bpmn:startEvent id="s"/><bpmn:task id="t" name="Hacer"/><bpmn:endEvent id="e"/><bpmn:sequenceFlow id="f1" sourceRef="s" targetRef="t"/><bpmn:sequenceFlow id="f2" sourceRef="t" targetRef="e"/></bpmn:process>
+      <bpmndi:BPMNDiagram id="d1"><bpmndi:BPMNPlane id="p1" bpmnElement="P"><bpmndi:BPMNShape id="s_di" bpmnElement="s"><dc:Bounds x="152" y="102" width="36" height="36"/></bpmndi:BPMNShape><bpmndi:BPMNShape id="t_di" bpmnElement="t"><dc:Bounds x="240" y="80" width="100" height="80"/></bpmndi:BPMNShape><bpmndi:BPMNShape id="e_di" bpmnElement="e"><dc:Bounds x="402" y="102" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="f1_di" bpmnElement="f1"><di:waypoint x="188" y="120"/><di:waypoint x="240" y="120"/></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="f2_di" bpmnElement="f2"><di:waypoint x="340" y="120"/><di:waypoint x="370" y="120"/><di:waypoint x="370" y="140"/><di:waypoint x="402" y="140"/></bpmndi:BPMNEdge></bpmndi:BPMNPlane></bpmndi:BPMNDiagram></bpmn:definitions>`;
+    const r=Bpmn.importXml(xml); assert(r.ok, r.errors?.join('; ')); const by=Formal.byId(r.model); assert(by.t.w===100 && by.t.h===80 && by.s.w===36, 'tamaños de Bounds'); const f2=r.model.edges.find(e=>e.id==='f2'); assert(f2.waypoints && f2.waypoints.length===4 && f2.waypoints[2].x===370, 'waypoints');
+    const out=Bpmn.exportXml(r.model).xml; assert(/width="100" height="80"/.test(out), 'tamaños exportados'); const r2=Bpmn.importXml(out); assert(JSON.stringify(r2.model.edges.find(e=>e.id==='f2').waypoints)===JSON.stringify(f2.waypoints), 'waypoints conservados'); }],
+  ['Modelo incompleto: errores estructurales comprensibles', () => { const r=Bpmn.importXml(`<bpmn:definitions xmlns:bpmn="${Bpmn.NS.bpmn}"><bpmn:process id="p"><bpmn:startEvent id="s"/><bpmn:task id="t" name="Hacer"/><bpmn:exclusiveGateway id="g"/><bpmn:sequenceFlow id="f1" sourceRef="s" targetRef="t"/><bpmn:sequenceFlow id="f2" sourceRef="t" targetRef="g"/><bpmn:sequenceFlow id="f3" sourceRef="g" targetRef="t"/></bpmn:process></bpmn:definitions>`); assert(r.ok); const codes=Formal.validate(r.model).map(i=>i.code); assert(codes.includes('no-end') && codes.includes('xor-no-cond') && codes.includes('xor-single'), codes.join(',')); }],
+];
+function assert(c, msg){ if (!c) throw new Error(msg || 'aserción fallida'); }
+function runSelfTests(){ return SelfTests.map(([name, fn]) => { try { fn(); return { name, ok:true }; } catch(e){ return { name, ok:false, error:e.message }; } }); }
+function bindRight(body){
+  const m=S.model;
+  body.querySelectorAll('[data-prop]').forEach(inp => inp.oninput = () => { const n=m.nodes.find(x=>x.id===S.sel.id); if (!n) return; if (!inp._c){ commit(); inp._c=true; } n[inp.dataset.prop]=inp.value.trim(); if (inp.dataset.prop==='symbol'){ n.symbol=inp.value.trim().slice(0,1); n.symbolSource='manual'; } renderCanvas(); });
+  body.querySelectorAll('[data-cond]').forEach(inp => inp.onchange = () => { const e=m.edges.find(x=>x.id===S.sel.id); if (!e) return; commit(); const c=Object.assign({kind:'none'}, e.condition||{}); const k=inp.dataset.cond; c[k]=inp.value;
+    if (k==='kind'){ if (inp.value==='compare'){ c.variable=c.variable||m.variables?.[0]?.name||''; c.op=c.op||'=='; c.value=c.value??'true'; } if (inp.value==='literal') c.value='true'; } e.condition=c; renderAll(); });
+  body.querySelectorAll('[data-act]').forEach(b => b.onclick = () => actions[b.dataset.act]?.());
+  body.querySelectorAll('[data-var]').forEach(inp => inp.onchange = () => { m.variables[+inp.dataset.var].value = inp.value; Storage.save(m); if (S.tab==='analysis') renderRight(); });
+  body.querySelectorAll('[data-delvar]').forEach(b => b.onclick = () => { commit(); m.variables.splice(+b.dataset.delvar,1); renderAll(); });
+  body.querySelectorAll('[data-trace]').forEach(c => c.onclick = () => { S.traceWord=c.dataset.trace; S.tab='trace'; renderRight(); });
+  body.querySelectorAll('[data-focus]').forEach(c => c.onclick = () => { const id=c.dataset.focus; S.sel = m.nodes.some(n=>n.id===id)? {kind:'node',id} : {kind:'edge',id}; renderCanvas(); });
+  body.querySelectorAll('[data-cycle]').forEach(b => b.onclick = () => { const c=Formal.cycles(m).cycles[+b.dataset.cycle]; const ns=new Set(c); const es=new Set(m.edges.filter(e=>ns.has(e.source)&&ns.has(e.target)&&c[(c.indexOf(e.source)+1)%c.length]===e.target).map(e=>e.id)); S.highlight={nodes:new Set(),edges:new Set(),cycleNodes:ns,cycleEdges:es}; renderCanvas(); });
+  const ti=body.querySelector('#traceInput'); if (ti) ti.onkeydown = (ev)=>{ if (ev.key==='Enter') actions.validate(); };
+}
+const actions = {
+  delete: deleteSelected,
+  addvar(){ const name=$('#newVarName').value.trim(); if (!name) return; if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)){ toast('Nombre de variable no válido.'); return; } if ((S.model.variables||=[]).some(v=>v.name===name)){ toast('Ya existe esa variable.'); return; }
+    commit(); const type=$('#newVarType').value; S.model.variables.push({ name, type, value: type==='boolean'?'true': type==='number'?'0':'' }); renderRight(); },
+  start(){ stopAuto(); const vars=Formal.varsFromModel(S.model); S.run=Formal.createRun(S.model, vars, Math.max(1, +$('#maxSteps').value||50)); S.highlight={nodes:new Set(),edges:new Set()}; renderAll(); },
+  step(){ if (!S.run) return; Formal.step(S.model, S.run); if (!['ready','running'].includes(S.run.status)) stopAuto(); renderAll(); if (S.run.status==='completed') toast('Ejecución completa: se alcanzó un evento de fin.'); },
+  auto(){ if (S.timer){ stopAuto(); S.run.status = S.run.status==='running'?'paused':S.run.status; renderAll(); return; } if (S.run.status==='paused') S.run.status='running';
+    S.timer=setInterval(()=>{ if (!S.run||!['ready','running'].includes(S.run.status)){ stopAuto(); renderAll(); return; } actions.step(); }, 700); renderRight(); },
+  clear(){ stopAuto(); S.run=null; renderAll(); },
+  tovalidator(){ S.traceWord=S.run.symbols; S.tab='trace'; renderRight(); },
+  validate(){ S.traceWord=$('#traceInput').value.trim(); renderRight(); },
+  highlighttrace(){ const afd=Formal.buildAFD(S.model); const res=Formal.runTrace(afd, S.traceWord); const ns=new Set(), es=new Set(); const start=S.model.nodes.find(n=>n.type==='start'); if (start) ns.add(start.id);
+    for (const s of res.steps){ if (s.to===afd.sink) break; for (const e of s.edges){ es.add(e); ns.add(S.model.edges.find(x=>x.id===e)?.target); } } S.run=null; S.highlight={nodes:ns,edges:es}; renderCanvas(); },
+  clearhl(){ S.highlight={nodes:new Set(),edges:new Set()}; renderCanvas(); }
+};
+function stopAuto(){ if (S.timer){ clearInterval(S.timer); S.timer=null; } }
+
+// ---------- barra superior / paleta ----------
+document.querySelectorAll('.pal[data-add]').forEach(p => p.onclick = () => addNode(p.dataset.add));
+// ---- BPMN: importar / exportar / ejemplos ----
+function loadBpmn(text, fileName){ stopAuto(); const r = Bpmn.importXml(text, fileName);
+  if (!r.ok){ showReport('Importación fallida', r.errors.map(e=>({level:'err',text:e})).concat((r.warnings||[]).map(w=>({level:'warn',text:w})))); return false; }
+  setModel(r.model); const first = Formal.completePaths(r.model, 1).paths[0]; S.traceWord = first ? first.symbols : ''; Storage.save(S.model); renderRight();
+  const items = r.warnings.map(w=>({level:'warn',text:w})).concat(r.info.map(i=>({level:'info',text:i})));
+  showReport(`Importado «${r.model.name}» (${r.model.nodes.length} nodos, ${r.model.edges.length} flujos)`, items.length? items : [{level:'ok', text:'Sin avisos: todos los elementos pertenecen al subconjunto soportado.'}]); return true; }
+function showReport(title, items){ let box = $('#report'); if (!box){ box=document.createElement('div'); box.id='report'; box.style.cssText='position:absolute;top:44px;left:50%;transform:translateX(-50%);z-index:8;width:min(640px,90%);max-height:60%;overflow:auto;box-shadow:0 8px 24px rgba(0,0,0,.15)'; box.className='card info'; $('#center').appendChild(box); }
+  box.innerHTML = `<div class="title">${esc(title)} <button class="small" onclick="this.closest('#report').remove()">Cerrar ✕</button></div><ul class="hint" style="margin-top:6px">${items.map(i=>`<li><span class="badge ${i.level==='err'?'err':i.level==='warn'?'warn':i.level==='ok'?'ok':'gray'}">${{err:'error',warn:'aviso',info:'info',ok:'ok'}[i.level]}</span> ${esc(i.text)}</li>`).join('')}</ul>`; }
+document.querySelectorAll('[data-example]').forEach(b => b.onclick = () => loadBpmn(EXAMPLES_BPMN[b.dataset.example], b.dataset.example + '.bpmn'));
+$('#btnImportBpmn').onclick = () => $('#fileImportBpmn').click();
+$('#fileImportBpmn').onchange = async (ev) => { const f=ev.target.files[0]; if (!f) return; loadBpmn(await f.text(), f.name); ev.target.value=''; };
+$('#btnExportBpmn').onclick = () => { const { xml, lost } = Bpmn.exportXml(S.model); const blob=new Blob([xml],{type:'application/xml'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=((S.model.meta?.fileName)||((S.model.name||'proceso').replace(/\s+/g,'_')+'.bpmn')).replace(/\.(xml|bpmn)$/i,'')+'.bpmn'; a.click();
+  if (lost.length) showReport('Exportado con pérdida de información', lost.map(t=>({level:'warn',text:t}))); else toast('Exportado como BPMN 2.0 XML.'); };
+$('#btnTests').onclick = () => { const res = runSelfTests(); const pass = res.filter(r=>r.ok).length; showReport(`Pruebas del adaptador BPMN y del motor: ${pass}/${res.length} superadas`, res.map(r=>({ level: r.ok?'ok':'err', text: r.name + (r.ok?'':` — ${r.error}`) }))); };
+$('#procName').oninput = (ev) => { S.model.name = ev.target.value; Storage.save(S.model); };
+$('#btnUndo').onclick = undo; $('#btnRedo').onclick = redo;
+$('#btnSave').onclick = () => { Storage.save(S.model); toast('Proceso guardado en localStorage.'); };
+$('#btnLoad').onclick = () => { const m=Storage.load(); if (!m){ toast('No hay proceso guardado.'); return; } const errs=validateModelShape(m); if (errs.length){ toast('Guardado corrupto: '+errs[0]); return; } setModel(m); toast('Proceso cargado.'); };
+$('#btnExport').onclick = () => { const blob=new Blob([JSON.stringify(S.model,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=(S.model.name||'proceso').replace(/\s+/g,'_')+'.flowroute.json'; a.click(); };
+$('#btnImport').onclick = () => $('#fileImport').click();
+$('#fileImport').onchange = async (ev) => { const f=ev.target.files[0]; if (!f) return; try { const obj=JSON.parse(await f.text()); const errs=validateModelShape(obj); if (errs.length){ alert('JSON no válido:\n- '+errs.join('\n- ')); return; } obj.variables ||= []; setModel(obj); Storage.save(obj); toast('Importado: '+obj.name); } catch(e){ alert('No se pudo leer el JSON: '+e.message); } ev.target.value=''; };
+$('#btnDemo').onclick = () => loadBpmn(EXAMPLES_BPMN.solicitud, 'solicitud.bpmn');
+$('#btnMore').onclick = (ev) => { ev.stopPropagation(); $('#moreMenu').classList.toggle('open'); };
+document.addEventListener('click', (ev) => { if (!ev.target.closest('.menu')) $('#moreMenu').classList.remove('open'); });
+$('#moreMenu').addEventListener('click', () => $('#moreMenu').classList.remove('open'));
+
+// ---------- arranque ----------
+(function init(){ const saved=Storage.load(); if (saved && !validateModelShape(saved).length) setModel(saved); else { const r=Bpmn.importXml(EXAMPLES_BPMN.solicitud,'solicitud.bpmn'); setModel(r.model); } })();
+</script>
+</body>
+</html>

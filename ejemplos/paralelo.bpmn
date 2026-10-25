@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_Paralelo" targetNamespace="http://flowroute.dev/examples">
+  <bpmn:process id="Process_Paralelo" name="Ejemplo con elementos no soportados" isExecutable="false">
+    <bpmn:startEvent id="Start_1" name="Inicio"/>
+    <bpmn:task id="Task_A" name="Preparar"/>
+    <bpmn:parallelGateway id="Gw_Fork" name="Bifurcación AND"/>
+    <bpmn:task id="Task_B" name="Empaquetar"/>
+    <bpmn:task id="Task_C" name="Facturar"/>
+    <bpmn:parallelGateway id="Gw_Join" name="Sincronización AND"/>
+    <bpmn:intermediateCatchEvent id="Timer_1" name="Esperar 1 día"><bpmn:timerEventDefinition id="TimerDef_1"/></bpmn:intermediateCatchEvent>
+    <bpmn:endEvent id="End_1" name="Fin"/>
+    <bpmn:sequenceFlow id="F1" sourceRef="Start_1" targetRef="Task_A"/>
+    <bpmn:sequenceFlow id="F2" sourceRef="Task_A" targetRef="Gw_Fork"/>
+    <bpmn:sequenceFlow id="F3" sourceRef="Gw_Fork" targetRef="Task_B"/>
+    <bpmn:sequenceFlow id="F4" sourceRef="Gw_Fork" targetRef="Task_C"/>
+    <bpmn:sequenceFlow id="F5" sourceRef="Task_B" targetRef="Gw_Join"/>
+    <bpmn:sequenceFlow id="F6" sourceRef="Task_C" targetRef="Gw_Join"/>
+    <bpmn:sequenceFlow id="F7" sourceRef="Gw_Join" targetRef="Timer_1"/>
+    <bpmn:sequenceFlow id="F8" sourceRef="Timer_1" targetRef="End_1"/>
+    <bpmn:textAnnotation id="Note_1"><bpmn:text>Las ramas AND se ejecutan en paralelo</bpmn:text></bpmn:textAnnotation>
+    <bpmn:association id="Assoc_1" sourceRef="Gw_Fork" targetRef="Note_1"/>
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_Paralelo">
+      <bpmndi:BPMNShape id="Start_1_di" bpmnElement="Start_1"><dc:Bounds x="152" y="182" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_A_di" bpmnElement="Task_A"><dc:Bounds x="240" y="160" width="100" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gw_Fork_di" bpmnElement="Gw_Fork"><dc:Bounds x="395" y="175" width="50" height="50"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_B_di" bpmnElement="Task_B"><dc:Bounds x="500" y="80" width="100" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_C_di" bpmnElement="Task_C"><dc:Bounds x="500" y="240" width="100" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gw_Join_di" bpmnElement="Gw_Join"><dc:Bounds x="655" y="175" width="50" height="50"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Timer_1_di" bpmnElement="Timer_1"><dc:Bounds x="762" y="182" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End_1_di" bpmnElement="End_1"><dc:Bounds x="852" y="182" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Note_1_di" bpmnElement="Note_1"><dc:Bounds x="380" y="300" width="180" height="40"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="F1_di" bpmnElement="F1"><di:waypoint x="188" y="200"/><di:waypoint x="240" y="200"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F2_di" bpmnElement="F2"><di:waypoint x="340" y="200"/><di:waypoint x="395" y="200"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F3_di" bpmnElement="F3"><di:waypoint x="420" y="175"/><di:waypoint x="420" y="120"/><di:waypoint x="500" y="120"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F4_di" bpmnElement="F4"><di:waypoint x="420" y="225"/><di:waypoint x="420" y="280"/><di:waypoint x="500" y="280"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F5_di" bpmnElement="F5"><di:waypoint x="600" y="120"/><di:waypoint x="680" y="120"/><di:waypoint x="680" y="175"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F6_di" bpmnElement="F6"><di:waypoint x="600" y="280"/><di:waypoint x="680" y="280"/><di:waypoint x="680" y="225"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F7_di" bpmnElement="F7"><di:waypoint x="705" y="200"/><di:waypoint x="762" y="200"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F8_di" bpmnElement="F8"><di:waypoint x="798" y="200"/><di:waypoint x="852" y="200"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Assoc_1_di" bpmnElement="Assoc_1"><di:waypoint x="420" y="225"/><di:waypoint x="440" y="300"/></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
